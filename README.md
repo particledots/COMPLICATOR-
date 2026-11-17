@@ -4,7 +4,9 @@ An original AU / VST3 instrument for Logic Pro: a complex oscillator with two co
 Instruō Cš-L. It is not a copy, contains no Instruō code or artwork, and is not affiliated with Instruō. The Cš-L is an
 analog module with no published firmware; its manual was used only to understand what the controls do.
 
-Status: **milestone 1 of 3 (waiting for a test in Logic).** Version 0.1.0.
+Status: **milestone 1 of 3 done (tested in Logic on 2026-11-17 on both test Macs: M4 Mac mini with Logic 11.2.2 and
+Intel Mac with Logic 10.7.8: everything works, no clicks under fast automation, projects reopen unchanged).**
+Version 0.1.0.
 
 ## What works now (milestone 1)
 
@@ -16,7 +18,8 @@ Status: **milestone 1 of 3 (waiting for a test in Logic).** Version 0.1.0.
   Pitch bend ±2 semitones.
 - **FM**: each oscillator's sine feeds the other's FM input, as on the module. FM amount knob and a curve switch:
   LIN, EXP, or TZ (linear through-zero, which the module does not have: the frequency can pass through zero and run
-  backwards). LIN stops at 0 Hz.
+  backwards). LIN stops at 0 Hz. In TZ the tone changes clearly from about 45% FM amount upwards: from there the other
+  oscillator's sine pushes the frequency below zero for part of each cycle. That is the through-zero sound, not a fault.
 - **LFO** (Osc A): drops Osc A by 7 octaves; it still follows the keys and hard sync still restarts it.
 - **Sub** (Osc B): the square wave at the oscillator's pitch, one octave down or two octaves down.
 - **Sync**: Off; Soft (Osc A's ramp turns Osc B round: an Osc B tuned a little flat of Osc A, or of a whole multiple
