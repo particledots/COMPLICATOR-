@@ -6,6 +6,7 @@
 
 #include "PluginProcessor.h"
 #include "Controls.h"
+#include <array>
 
 class ComplicatorPanel : public juce::Component, private juce::Timer
 {
@@ -23,6 +24,7 @@ private:
                       bool toggle = false, bool dim = false);
     CxMenu& menu (const char* id, const juce::String& prefix, juce::Rectangle<int> r, bool dim = false);
     void dimIt (juce::Component&);
+    void updateScope (int which);
 
     ComplicatorAudioProcessor& proc;
     CxLookAndFeel lnf;
@@ -33,6 +35,8 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> foldAAtt, foldBAtt;
     juce::ComboBox presetMenu;
     float shownA = 0.0f, shownB = 0.0f;
+    static constexpr int kScopeW = 212;                          // scope columns (panel units)
+    std::array<std::array<float, kScopeW + 1>, 2> scopeLine {};  // Final A / Final B, -1..+1
 };
 
 class ComplicatorAudioProcessorEditor : public juce::AudioProcessorEditor

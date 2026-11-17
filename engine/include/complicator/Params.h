@@ -1,8 +1,8 @@
 // COMPLICATOR engine: every setting the engine reads. Plain values, no plugin code.
 //
 // The list matches the plugin's full parameter list, which was fixed in the first build (milestone 1) so that
-// saved projects never change. Settings marked "M2" or "M3" are stored from the start but only used from that
-// milestone on.
+// saved projects never change. Settings marked "M2" are used from milestone 2 on (this version); "M3" ones are
+// stored but not used yet.
 
 #pragma once
 

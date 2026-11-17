@@ -39,6 +39,7 @@ void OscA::reset()
 {
     p = 0.0;
     bSine.reset (0.0f); bTri.reset (-1.0f); bSaw.reset (-1.0f); bPulse.reset (1.0f);
+    lastPulse = 1.0f; pulseIssued = 0.0f;
 }
 
 void OscA::segment (double pa, double inc, float t0, float t1, float duty, bool pulseOn, float& wrapAt)
@@ -60,7 +61,7 @@ void OscA::segment (double pa, double inc, float t0, float t1, float duty, bool 
             const float d = ago (cw);
             bSaw.step (-2.0f * dir, d);
             bTri.ramp (8.0f * absInc, d);
-            if (pulseOn) bPulse.step (2.0f * dir, d);
+            if (pulseOn) { bPulse.step (2.0f * dir, d); pulseIssued += 2.0f * dir; }
             if (wrapAt < 0.0f) wrapAt = d;
         }
         const double ch = k + 0.5;               // triangle top corner
@@ -70,7 +71,10 @@ void OscA::segment (double pa, double inc, float t0, float t1, float duty, bool 
         {
             const double cd = k + (double) duty; // pulse falls
             if (crossed (cd))
+            {
                 bPulse.step (-2.0f * dir, ago (cd));
+                pulseIssued -= 2.0f * dir;
+            }
         }
     }
 }
@@ -96,7 +100,9 @@ float OscA::process (double inc, float duty, float resetAt, OscAOut& out)
         bSaw.step (-1.0f - sawOf (pr), d);
         bTri.step (-1.0f - triOf (pr), d);
         bSine.step (0.0f - sineOf (pr), d);
-        bPulse.step (pulseOf (0.0, duty) - pulseOf (pr, duty), d);
+        const float resetJump = pulseOf (0.0, duty) - pulseOf (pr, duty);
+        bPulse.step (resetJump, d);
+        pulseIssued += resetJump;
         // ... and the change of slope it causes.
         const float triBefore = (float) ((pr < 0.5 ? 4.0 : -4.0) * inc);
         bTri.ramp ((float) (4.0 * inc) - triBefore, d);
@@ -107,10 +113,17 @@ float OscA::process (double inc, float duty, float resetAt, OscAOut& out)
         p = wrap01 (inc * (double) d);
     }
 
+    // A pulse edge that moved past the phase (audio-rate PWM) was not caught above: smooth it here, centred on the sample.
+    const float pulseNow = pulseOf (p, duty);
+    const float residual = pulseNow - (lastPulse + pulseIssued);
+    if (std::fabs (residual) > 0.5f) bPulse.step (residual, 0.5f);
+    lastPulse = pulseNow;
+    pulseIssued = 0.0f;
+
     out.sine  = bSine.push (sineOf (p));
     out.tri   = bTri.push (triOf (p));
     out.saw   = bSaw.push (sawOf (p));
-    out.pulse = bPulse.push (pulseOf (p, duty));
+    out.pulse = bPulse.push (pulseNow);
     return wrapAt;
 }
 
@@ -119,7 +132,8 @@ float OscA::process (double inc, float duty, float resetAt, OscAOut& out)
 void OscB::reset()
 {
     x = 0.0; dir = 1; sub1 = 1; sub2 = 1;
-    bSine.reset (0.0f); bTri.reset (0.0f); bSquare.reset (1.0f); bStep.reset (1.0f / 3.0f);
+    bSine.reset (0.0f); bTri.reset (0.0f); bSquare.reset (1.0f); bStep.reset (-1.0f / 3.0f);
+    lastStep = -1.0f / 3.0f; stepIssued = 0.0f;
 }
 
 void OscB::linearPiece (double xa, double xb, float ta, float tb, float w)
@@ -132,7 +146,9 @@ void OscB::linearPiece (double xa, double xb, float ta, float tb, float w)
         if (rising ? (c >= xa && c < xb) : (c < xa && c >= xb))
         {
             const float te = ta + (float) ((c - xa) / (xb - xa)) * (tb - ta);
-            bStep.step (rising ? (2.0f / 3.0f) : (-2.0f / 3.0f), clampD (1.0f - te));
+            const float h = rising ? (2.0f / 3.0f) : (-2.0f / 3.0f);
+            bStep.step (h, clampD (1.0f - te));
+            stepIssued += h;
         }
     }
 }
@@ -215,10 +231,16 @@ void OscB::process (double speed, float w, int subMode, float reverseAt, OscBOut
     }
 
     const int sq = subMode == 0 ? dir : (subMode == 1 ? sub1 : sub2);
+    const float stepNow = steppedOf (x, w);
+    const float residual = stepNow - (lastStep + stepIssued);        // step edges moved by audio-rate PWM
+    if (std::fabs (residual) > 0.3f) bStep.step (residual, 0.5f);
+    lastStep = stepNow;
+    stepIssued = 0.0f;
+
     out.tri     = bTri.push ((float) x);
     out.sine    = bSine.push ((float) std::sin (kHalfPi * x));
     out.square  = bSquare.push ((float) sq);
-    out.stepped = bStep.push (steppedOf (x, w));
+    out.stepped = bStep.push (stepNow);
     out.syncEdge = edge;
 }
 

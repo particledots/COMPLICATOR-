@@ -35,6 +35,9 @@ namespace complicator
 
         double p = 0.0;
         BlepOut bSine, bTri, bSaw, bPulse;
+        // Audio-rate PWM can move the pulse edge past the phase without the phase crossing it. These two catch such
+        // jumps: the pulse as the last sample saw it, and the sum of the jumps already smoothed this sample.
+        float lastPulse = 1.0f, pulseIssued = 0.0f;
     };
 
     class OscB
@@ -58,5 +61,6 @@ namespace complicator
         int dir = 1;          // +1 rising, -1 falling; this is also the square wave
         int sub1 = 1, sub2 = 1;
         BlepOut bSine, bTri, bSquare, bStep;
+        float lastStep = -1.0f / 3.0f, stepIssued = 0.0f;   // as lastPulse / pulseIssued, for the staircase
     };
 } // namespace complicator

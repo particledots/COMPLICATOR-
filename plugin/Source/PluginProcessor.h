@@ -38,6 +38,7 @@ public:
 
     juce::AudioProcessorValueTreeState& getValueTreeState() { return apvts; }
     const complicator::Engine& getEngine() const { return engine; }
+    void setScopeActive (bool on) { engine.setScopeActive (on); }     // the panel is open: record the scopes
 
 private:
     complicator::Params readParams() const;
@@ -45,6 +46,7 @@ private:
 
     juce::AudioProcessorValueTreeState apvts;
     complicator::Engine engine;
+    std::vector<float> sidechainMono;        // the sidechain input summed to mono, copied before the output is written
 
     // Fast access to the current control values (audio thread).
     struct OscPtrs { std::atomic<float> *coarse, *fine, *pwm, *fm, *fmCurve, *fold, *foldCv, *sym; };

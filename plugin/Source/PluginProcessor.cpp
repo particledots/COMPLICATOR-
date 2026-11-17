@@ -64,6 +64,7 @@ void ComplicatorAudioProcessor::prepareToPlay (double sampleRate, int samplesPer
     engine.setParams (readParams());
     engine.prepare (sampleRate, samplesPerBlock);
     setLatencySamples (juce::roundToInt (engine.latencySamples()));
+    sidechainMono.assign ((size_t) juce::jmax (samplesPerBlock, 16384), 0.0f);
 }
 
 bool ComplicatorAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -95,6 +96,22 @@ void ComplicatorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
     const int n = buffer.getNumSamples();
     if (numCh == 0) { midi.clear(); return; }
 
+    // Sidechain (Patch row source "Sidechain"): the input and output buffers share memory, so the sidechain is copied
+    // out first. If Logic has not connected it (or the block is unusually long), the engine simply gets silence.
+    const float* sidechain = nullptr;
+    if (auto* scBus = getBus (true, 0); scBus != nullptr && scBus->isEnabled() && n <= (int) sidechainMono.size())
+    {
+        auto in = getBusBuffer (buffer, true, 0);
+        if (in.getNumChannels() > 0)
+        {
+            const float* l = in.getReadPointer (0);
+            const float* r = in.getReadPointer (in.getNumChannels() > 1 ? 1 : 0);
+            for (int i = 0; i < n; ++i)
+                sidechainMono[(size_t) i] = 0.5f * (l[i] + r[i]);
+            sidechain = sidechainMono.data();
+        }
+    }
+
     float* chans[2] = { out.getWritePointer (0), out.getWritePointer (numCh > 1 ? 1 : 0) };
     const int useCh = numCh > 1 ? 2 : 1;
 
@@ -106,7 +123,7 @@ void ComplicatorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
         if (at > pos)
         {
             float* seg[2] = { chans[0] + pos, chans[1] + pos };
-            engine.process (seg, useCh, at - pos);
+            engine.process (seg, useCh, at - pos, sidechain != nullptr ? sidechain + pos : nullptr);
             pos = at;
         }
         handleMidi (meta.getMessage());
@@ -114,7 +131,7 @@ void ComplicatorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
     if (pos < n)
     {
         float* seg[2] = { chans[0] + pos, chans[1] + pos };
-        engine.process (seg, useCh, n - pos);
+        engine.process (seg, useCh, n - pos, sidechain != nullptr ? sidechain + pos : nullptr);
     }
     for (int c = 2; c < numCh; ++c)
         out.clear (c, 0, n);
