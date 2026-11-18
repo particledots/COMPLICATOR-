@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0 — milestone 2 (built 2026-11-17, waiting for the Logic test)
+## 0.2.0 — milestone 2 (built and tested in Logic 2026-11-17)
 
 - **Wavefolders** on both oscillators with Symmetry, Wavefold CV amount and the Final outputs. Fader: left = near
   silence, centre = a plain sine, right = rich (gain up to 10x in front of a triangle folder). Band-limited with
@@ -20,6 +20,11 @@
   open panel; the multiplier likewise).
 - Oscillators: audio-rate PWM (from the PWM CV inputs) no longer leaves unsmoothed edges on the pulse and the staircase;
   Osc B's staircase starts on the right step (a small start-up step in 0.1.0).
+- Logic test result (Bryn, 2026-11-17): every step worked as described; nothing blew up; no clicks or dropouts with heavy
+  automation; the resized panel stays in proportion; the Side Chain menu is available. The only surprise: the folders
+  are silent until Final A / Final B is raised, because the Final levels start at 0 (kept as is). Intel Mac CPU: the
+  Logic meter shows no numbers; Bryn's estimate is 5% or less. Engine CPU on the Linux build machine: about 2.3% of one
+  core at 48 kHz with everything on.
 - Engine self-test extended to 181 checks: the folder, soft clip and rectifier maths, folder level / silence / richness /
   symmetry / aliasing (against a plain fold), the multiplier (ring, half, full, depth, clipping), every Index route, every
   Patch source (envelope, velocity, wheel, aftertouch, sidechain, and all 17 sources into all 11 inputs), patched hard and

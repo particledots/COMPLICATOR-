@@ -4,9 +4,14 @@ An original AU / VST3 instrument for Logic Pro: a complex oscillator with two co
 Instruō Cš-L. It is not a copy, contains no Instruō code or artwork, and is not affiliated with Instruō. The Cš-L is an
 analog module with no published firmware; its manual was used only to understand what the controls do.
 
-Status: **milestone 2 of 3 built, waiting for the Logic test.** Milestone 1 (version 0.1.0) was tested in Logic on
-2026-11-17 on both test Macs (M4 Mac mini with Logic 11.2.2 and Intel Mac with Logic 10.7.8): everything worked, no
-clicks under fast automation, projects reopened unchanged. Version 0.2.0.
+Status: **milestone 2 of 3 done (tested in Logic on 2026-11-17: all test steps worked as described, nothing blew up,
+no clicks or dropouts under heavy automation, the panel stays in proportion when resized, and the Side Chain menu is
+available for COMPLICATOR in Logic).** Milestone 1 (version 0.1.0) was tested on both test Macs (M4 Mac mini with Logic
+11.2.2 and Intel Mac with Logic 10.7.8). Version 0.2.0.
+
+Test notes: the Logic CPU meter shows no numbers, so the Intel Mac load is only Bryn's estimate (5% or less with
+everything on). The Final A / Final B mixer levels start at 0, so the folders are silent until a Final level is raised
+(the Wavefold fader only changes the Final output); Bryn decided to keep it that way.
 
 ## What is new in milestone 2
 
@@ -41,7 +46,8 @@ Signals inside are plus/minus 1 (the module's plus/minus 5 V). Envelope, velocit
   (soft), found to a fraction of a sample.
 - **Scopes** for Final A and Final B, drawn steady over one or two cycles (a slow signal scrolls). They record only while
   the panel is open.
-- **Mixer.** Final A, Multiply and Final B now have their levels.
+- **Mixer.** Final A, Multiply and Final B now have their levels. They start at 0, like the other new outputs, so raise
+  Final A or Final B to hear a folder.
 - **Sidechain.** The sidechain input bus is the Patch source "Sidechain" (summed to mono). If Logic offers a Side Chain
   menu for COMPLICATOR, route a track there; if it does not, the source is silent.
 - **Band-limiting.** The folders, the multiplier's soft clip and the rectifiers use first-order antiderivative
@@ -81,7 +87,7 @@ Signals inside are plus/minus 1 (the module's plus/minus 5 V). Envelope, velocit
 
 ## Coming
 
-- **Milestone 3**: factory presets, a Quality menu (2× / 4× / 8×), CPU checks on the Intel Mac, pluginval clean, polish.
+- **Milestone 3**: factory presets, a Quality menu (2× / 4× / 8×), CPU checks on the Intel Mac, old-project check, pluginval clean, polish.
 
 The Preset and Quality controls are already on the panel, dimmed and marked M3, and already stored in projects: every
 parameter was fixed in the first build, so projects saved now will open unchanged later.
