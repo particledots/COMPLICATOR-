@@ -4,8 +4,14 @@ An original AU / VST3 instrument for Logic Pro: a complex oscillator with two co
 Instruō Cš-L. It is not a copy, contains no Instruō code or artwork, and is not affiliated with Instruō. The Cš-L is an
 analog module with no published firmware; its manual was used only to understand what the controls do.
 
-Status: **milestone 3 of 3 built (version 0.3.0), waiting for the Logic test.** Milestone 2 (0.2.0) and milestone 1
-(0.1.0) were tested in Logic on both test Macs (M4 Mac mini with Logic 11.2.2 and Intel Mac with Logic 10.7.8).
+Status: **all 3 milestones done (version 0.3.0, tested in Logic on 2026-11-17).** Nothing further is planned; only
+cosmetic panel changes may follow. Milestones 1 to 3 were tested in Logic on the Intel Mac (Logic 10.7.8); milestones 1
+and 2 also on the M4 Mac mini (Logic 11.2.2).
+
+Milestone 3 test result (Bryn, Intel Mac): old project opens unchanged; all 9 presets sound and are level matched;
+the sidechain folder preset works; the preset name survives save and reopen; Init and presets leave Pitch Snap, Scale,
+Key and Quality alone; switching Quality while a note is held gives no clicks; the Quality menu shows "8x heavy"; a
+soft-synced fifth stops beating; hard knob automation at 4x gives no clicks. Intel Mac CPU is in the table below.
 
 Test notes: the Logic CPU meter shows no numbers on the Intel Mac, so its load is measured with Activity Monitor
 (see "CPU and the Quality menu"). The Final A / Final B mixer levels start at 0, so the folders are silent until a
@@ -50,6 +56,11 @@ Measured on the GitHub Linux machine, % of one core at 48 kHz, a sustained patch
 | 2x | 1.0 | 1.4 | 1.3 |
 | 4x (default) | 1.8 | 2.4 | 2.4 |
 | 8x (heavy) | 3.3 | 4.4 | 4.4 |
+
+Measured on the Intel Mac (Activity Monitor, Logic Pro % CPU, 100% = one core; "Five Modules" held, Env amp):
+baseline with no note 16.5% (15.5% fully idle), 2x 16.2%, 4x 21.6%, 8x 26.7%. So the plugin costs about 0% at 2x
+(within the noise), about 5 points of one core at 4x (the default) and about 10 points at 8x. Safe at 4x; 8x doubles
+the cost of 4x and is what the "heavy" mark is for.
 
 Aliasing (non-harmonic energy, high notes): 2x about -53 dB, 4x about -74 dB, 8x about -88 dB.
 

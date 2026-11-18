@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0 — milestone 3 (waiting for the Logic test)
+## 0.3.0 — milestone 3 (built and tested in Logic 2026-11-17)
 
 - **Factory presets** (9) and an **Init** entry in the now-live Preset menu; also offered as AU / VST3 programs. Presets
   set their own Final levels and Volume (level matched, about -19 dB RMS) and never touch Pitch Snap, Scale, Key or
@@ -10,6 +10,10 @@
   or menu list changed (65 parameters, all version 1).
 - **Soft sync**: Osc B is pulled half way to the peak at each turn, so a fifth, fourth, third and sixth lock into their
   natural pattern. Sound with soft sync off is bit-identical to 0.2.0 at 4x.
+- Logic test result (Bryn, Intel Mac, 2026-11-17): every step worked as described: old project unchanged, all presets
+  good and level matched, sidechain preset works, preset saved with the project, Init/presets leave Snap/Scale/Key/Quality
+  alone, no clicks switching Quality or under heavy automation, 8x shows "heavy", soft-sync fifth stops beating.
+  Intel Mac CPU (Logic Pro % CPU in Activity Monitor): baseline 16.5, 2x 16.2, 4x 21.6, 8x 26.7.
 - The "M3" tag on the panel is gone (nothing is dimmed). No other panel change.
 - New `ComplicatorCheck` console program and a "Plugin-layer check" job in the Actions run: golden control list,
   restoring 0.1.0 / 0.2.0 saved states, presets, menus, panel snapshots.
