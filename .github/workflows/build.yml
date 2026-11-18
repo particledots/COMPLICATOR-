@@ -45,7 +45,8 @@ jobs:
                  libfreetype-dev libfontconfig1-dev libgl1-mesa-dev \
             && cmake -S . -B build-check -DCOMPLICATOR_BUILD_PLUGIN=OFF -DCOMPLICATOR_BUILD_CHECK=ON -DCMAKE_BUILD_TYPE=Release \
             && cmake --build build-check --target ComplicatorCheck -j 4 \
-            && find build-check -type f -name ComplicatorCheck -perm -u+x | head -n 1 | xargs -I{} {} ) > plugin-check.log 2>&1
+            && BIN=$(find build-check -type f -name ComplicatorCheck -perm -u+x | head -n 1) \
+            && echo "running $BIN" && "$BIN" ) > plugin-check.log 2>&1
           code=$?
           tail -n 30 plugin-check.log
           if [ $code -ne 0 ]; then
