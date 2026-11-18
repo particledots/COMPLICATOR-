@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.0 addendum — 22 more factory presets (built and tested in Logic 2026-11-17)
+
+- **22 new factory presets** of my own (not from the manual), appended after the nine existing ones: Glass Bell,
+  Tine Piano, Metal Gong, Fold Pluck, Velocity Brass, Reed Organ, Hollow Flute, Pressure Vibrato, Wheel Folder,
+  Sync Sweep Lead, Soft Sync Fifth, Stair Pad, Open Fifth Drone, Deep Sub, Wobble Bass, Acid Fold, Sine Kick,
+  Laser Zap, Metal Hat, Dub Siren, Tangle, Ring Voice (sidechain in). The Preset menu now has 32 entries (Init + 31).
+  The order of existing entries is unchanged, so saved projects keep their preset choice. Level matched (about
+  -19 dB RMS), and they never touch Pitch Snap, Scale, Key or Quality.
+- No parameter, panel or plugin-layer change; version number still 0.3.0.
+- Engine self-test extended to 3285 checks: all 31 presets (level, finite, bounded, every quality; struck sounds are
+  level-checked over their first half second) plus one behaviour check per new preset. Plugin-layer check 2305 checks,
+  auval and pluginval (strictness 5, AU and VST3) passed in Actions run 44244367907.
+- Logic test result (Bryn, 2026-11-17): everything works.
+
 ## 0.3.0 — milestone 3 (built and tested in Logic 2026-11-17)
 
 - **Factory presets** (9) and an **Init** entry in the now-live Preset menu; also offered as AU / VST3 programs. Presets

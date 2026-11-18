@@ -8,6 +8,9 @@ Status: **all 3 milestones done (version 0.3.0, tested in Logic on 2026-11-17).*
 cosmetic panel changes may follow. Milestones 1 to 3 were tested in Logic on the Intel Mac (Logic 10.7.8); milestones 1
 and 2 also on the M4 Mac mini (Logic 11.2.2).
 
+After milestone 3, 22 more factory presets of my own were added (see "More factory presets" below). Build and engine
+tests passed in Actions and Bryn tested them in Logic on 2026-11-17: everything works.
+
 Milestone 3 test result (Bryn, Intel Mac): old project opens unchanged; all 9 presets sound and are level matched;
 the sidechain folder preset works; the preset name survives save and reopen; Init and presets leave Pitch Snap, Scale,
 Key and Quality alone; switching Quality while a note is held gives no clicks; the Quality menu shows "8x heavy"; a
@@ -36,6 +39,35 @@ Final level is raised; every factory preset sets the Final levels it needs.
   | Racket Voice | Racket (both oscillators FM-ed, PWM routed from the Index) |
   | Five Modules | The five-module patch |
   | Wavefolder (sidechain in) | The folder used on outside audio: needs a Side Chain source |
+
+- **More factory presets (added after milestone 3)**: 22 presets of my own, not from the manual, are appended after
+  the nine above, so the Preset menu now has 32 entries (Init + 31) and every saved menu choice still points to the
+  same preset. They are level matched to the others and never touch Pitch Snap, Scale, Key or Quality.
+
+  | Preset | What it is | Play it with |
+  |---|---|---|
+  | Glass Bell | FM bell: bright inharmonic strike that relaxes into a pure tone | notes C5 and up |
+  | Tine Piano | FM electric piano | velocity (harder = brighter) |
+  | Metal Gong | ring-modulated gong that rings for seconds | low to middle notes |
+  | Fold Pluck | the envelope sweeps the wavefolder like a filter | short notes |
+  | Velocity Brass | both folders driven by velocity | velocity (soft = dull, hard = bright) |
+  | Reed Organ | folded sine with square and triangle | held chords |
+  | Hollow Flute | Osc B sine with light vibrato | notes around C5 |
+  | Pressure Vibrato | Osc A as LFO bends Osc B | aftertouch (none = steady, full = about ±½ semitone) |
+  | Wheel Folder | mod wheel opens Osc A's folder and Symmetry | mod wheel |
+  | Sync Sweep Lead | hard sync, the envelope sweeps the timbre | leads |
+  | Soft Sync Fifth | soft sync with B a fifth up; locks 2 : 3 and sounds an octave below the note | bass or lead |
+  | Stair Pad | a slow LFO moves Osc B's staircase width | held, slow |
+  | Open Fifth Drone | Amp is Drone: sounds with no note | always on |
+  | Deep Sub | Osc B sine plus its sub square one octave down | low notes |
+  | Wobble Bass | LFO of about 5 Hz folds Osc B | low notes |
+  | Acid Fold | envelope opens the folder, Symmetry adds even harmonics | low, short notes |
+  | Sine Kick | the envelope sweeps Osc A's pitch down about 4 octaves | around C2 |
+  | Laser Zap | hard sync with a pitch sweep down about 4 octaves | any note |
+  | Metal Hat | Osc B square times a folded high Osc A, short envelope | any note |
+  | Dub Siren | Osc A as an LFO ramp sweeps Osc B's pitch | held note |
+  | Tangle | the two oscillators frequency-modulate each other through their folded Finals | low to middle notes |
+  | Ring Voice (sidechain in) | ring modulator for outside audio; silent until a Side Chain source is chosen | keys tune the carrier |
 
 - **Quality menu** (2x / 4x / 8x oversampling): the parameter was there since 0.1.0 and is unchanged. **4x stays the
   default. 8x is marked "heavy"** in the menu, and its label turns amber when chosen. Changing it while playing fades
