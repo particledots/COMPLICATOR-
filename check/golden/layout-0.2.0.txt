@@ -1,0 +1,65 @@
+0 aCoarse v1 | Osc A Coarse | range -48.0000..48.0000 step 0.0000 | default 0.0000
+1 aFine v1 | Osc A Fine | range -1.0000..1.0000 step 0.0000 | default 0.0000
+2 aPwm v1 | Osc A PWM | range 0.0000..1.0000 step 0.0000 | default 0.5000
+3 aFm v1 | Osc A FM amount | range 0.0000..1.0000 step 0.0000 | default 0.0000
+4 aFmCurve v1 | Osc A FM curve | range 0.0000..2.0000 step 1.0000 | default 1.0000 | choices Lin;Exp;Through-zero
+5 aLfo v1 | Osc A LFO mode | range 0.0000..1.0000 step 1.0000 | default 0.0000 | switch
+6 aFold v1 | Osc A Wavefold | range 0.0000..1.0000 step 0.0000 | default 0.5000
+7 aFoldCv v1 | Osc A Wavefold CV amount | range -1.0000..1.0000 step 0.0000 | default 0.0000
+8 aSym v1 | Osc A Symmetry | range -1.0000..1.0000 step 0.0000 | default 0.0000
+9 bCoarse v1 | Osc B Coarse | range -48.0000..48.0000 step 0.0000 | default 0.0000
+10 bFine v1 | Osc B Fine | range -1.0000..1.0000 step 0.0000 | default 0.0000
+11 bPwm v1 | Osc B PWM | range 0.0000..1.0000 step 0.0000 | default 0.5000
+12 bFm v1 | Osc B FM amount | range 0.0000..1.0000 step 0.0000 | default 0.0000
+13 bFmCurve v1 | Osc B FM curve | range 0.0000..2.0000 step 1.0000 | default 1.0000 | choices Lin;Exp;Through-zero
+14 bSub v1 | Osc B Sub | range 0.0000..2.0000 step 1.0000 | default 0.0000 | choices Off;-1 octave;-2 octaves
+15 bFold v1 | Osc B Wavefold | range 0.0000..1.0000 step 0.0000 | default 0.5000
+16 bFoldCv v1 | Osc B Wavefold CV amount | range -1.0000..1.0000 step 0.0000 | default 0.0000
+17 bSym v1 | Osc B Symmetry | range -1.0000..1.0000 step 0.0000 | default 0.0000
+18 keys v1 | Keys play | range 0.0000..2.0000 step 1.0000 | default 1.0000 | choices A;A+B;B
+19 pitchSnap v1 | Pitch Snap | range 0.0000..2.0000 step 1.0000 | default 0.0000 | choices Off;Semitones;Steps
+20 pitchScale v1 | Pitch Scale | range 0.0000..28.0000 step 1.0000 | default 0.0000 | choices Off;Major (Ionian);Dorian;Phrygian;Lydian;Mixolydian;Aeolian (Natural Minor);Locrian;Harmonic Minor;Melodic Minor;Harmonic Major;Hungarian Minor;Phrygian Dominant;Double Harmonic (Byzantine);Neapolitan Minor;Neapolitan Major;Enigmatic;Major Pentatonic;Minor Pentatonic;Blues;Hirajoshi;In Sen;Kumoi;Iwato;Whole Tone;Octatonic (Whole-Half);Octatonic (Half-Whole);Prometheus;Chromatic
+21 pitchKey v1 | Key | range 0.0000..11.0000 step 1.0000 | default 0.0000 | choices C;C#;D;D#;E;F;F#;G;G#;A;A#;B
+22 sync v1 | Sync | range 0.0000..2.0000 step 1.0000 | default 0.0000 | choices Off;Soft (A to B);Hard (B to A)
+23 multDepth v1 | Multiply depth | range 0.0000..1.0000 step 0.0000 | default 0.7200
+24 multMode v1 | Multiply mode | range 0.0000..2.0000 step 1.0000 | default 0.0000 | choices Ring;Half-wave;Full-wave
+25 index v1 | Index | range 0.0000..1.0000 step 0.0000 | default 0.5000
+26 indexCv v1 | Index CV amount | range -1.0000..1.0000 step 0.0000 | default 0.0000
+27 routeFmA v1 | Route: Index to FM A | range 0.0000..1.0000 step 1.0000 | default 0.0000 | switch
+28 routeFmB v1 | Route: Index to FM B | range 0.0000..1.0000 step 1.0000 | default 0.0000 | switch
+29 routeFoldA v1 | Route: Index to Fold A | range 0.0000..1.0000 step 1.0000 | default 0.0000 | switch
+30 routeFoldB v1 | Route: Index to Fold B | range 0.0000..1.0000 step 1.0000 | default 0.0000 | switch
+31 routeSymA v1 | Route: Index to Symmetry A | range 0.0000..1.0000 step 1.0000 | default 0.0000 | switch
+32 routeSymB v1 | Route: Index to Symmetry B | range 0.0000..1.0000 step 1.0000 | default 0.0000 | switch
+33 routePwm v1 | Route: Index to PWM | range 0.0000..2.0000 step 1.0000 | default 0.0000 | choices Off;Both;A to B only
+34 patchFmA v1 | Patch: FM A in | range 0.0000..17.0000 step 1.0000 | default 0.0000 | choices Normal;Off;A Sine;A Tri;A Saw;A PWM;A Final;B Sine;B Tri;B Square;B PWM;B Final;Multiply;Envelope;Velocity;Mod wheel;Aftertouch;Sidechain
+35 patchFmB v1 | Patch: FM B in | range 0.0000..17.0000 step 1.0000 | default 0.0000 | choices Normal;Off;A Sine;A Tri;A Saw;A PWM;A Final;B Sine;B Tri;B Square;B PWM;B Final;Multiply;Envelope;Velocity;Mod wheel;Aftertouch;Sidechain
+36 patchPwmA v1 | Patch: PWM A CV | range 0.0000..17.0000 step 1.0000 | default 0.0000 | choices Normal;Off;A Sine;A Tri;A Saw;A PWM;A Final;B Sine;B Tri;B Square;B PWM;B Final;Multiply;Envelope;Velocity;Mod wheel;Aftertouch;Sidechain
+37 patchPwmB v1 | Patch: PWM B CV | range 0.0000..17.0000 step 1.0000 | default 0.0000 | choices Normal;Off;A Sine;A Tri;A Saw;A PWM;A Final;B Sine;B Tri;B Square;B PWM;B Final;Multiply;Envelope;Velocity;Mod wheel;Aftertouch;Sidechain
+38 patchFoldA v1 | Patch: Fold A CV | range 0.0000..17.0000 step 1.0000 | default 0.0000 | choices Normal;Off;A Sine;A Tri;A Saw;A PWM;A Final;B Sine;B Tri;B Square;B PWM;B Final;Multiply;Envelope;Velocity;Mod wheel;Aftertouch;Sidechain
+39 patchFoldB v1 | Patch: Fold B CV | range 0.0000..17.0000 step 1.0000 | default 0.0000 | choices Normal;Off;A Sine;A Tri;A Saw;A PWM;A Final;B Sine;B Tri;B Square;B PWM;B Final;Multiply;Envelope;Velocity;Mod wheel;Aftertouch;Sidechain
+40 patchSymA v1 | Patch: Symmetry A in | range 0.0000..17.0000 step 1.0000 | default 0.0000 | choices Normal;Off;A Sine;A Tri;A Saw;A PWM;A Final;B Sine;B Tri;B Square;B PWM;B Final;Multiply;Envelope;Velocity;Mod wheel;Aftertouch;Sidechain
+41 patchSymB v1 | Patch: Symmetry B in | range 0.0000..17.0000 step 1.0000 | default 0.0000 | choices Normal;Off;A Sine;A Tri;A Saw;A PWM;A Final;B Sine;B Tri;B Square;B PWM;B Final;Multiply;Envelope;Velocity;Mod wheel;Aftertouch;Sidechain
+42 patchIndex v1 | Patch: Index CV | range 0.0000..17.0000 step 1.0000 | default 0.0000 | choices Normal;Off;A Sine;A Tri;A Saw;A PWM;A Final;B Sine;B Tri;B Square;B PWM;B Final;Multiply;Envelope;Velocity;Mod wheel;Aftertouch;Sidechain
+43 patchCarrier v1 | Patch: Multiply carrier | range 0.0000..17.0000 step 1.0000 | default 0.0000 | choices Normal;Off;A Sine;A Tri;A Saw;A PWM;A Final;B Sine;B Tri;B Square;B PWM;B Final;Multiply;Envelope;Velocity;Mod wheel;Aftertouch;Sidechain
+44 patchModulator v1 | Patch: Multiply modulator | range 0.0000..17.0000 step 1.0000 | default 0.0000 | choices Normal;Off;A Sine;A Tri;A Saw;A PWM;A Final;B Sine;B Tri;B Square;B PWM;B Final;Multiply;Envelope;Velocity;Mod wheel;Aftertouch;Sidechain
+45 patchHardSync v1 | Patch: Hard sync A in | range 0.0000..17.0000 step 1.0000 | default 0.0000 | choices Normal;Off;A Sine;A Tri;A Saw;A PWM;A Final;B Sine;B Tri;B Square;B PWM;B Final;Multiply;Envelope;Velocity;Mod wheel;Aftertouch;Sidechain
+46 patchSoftSync v1 | Patch: Soft sync B in | range 0.0000..17.0000 step 1.0000 | default 0.0000 | choices Normal;Off;A Sine;A Tri;A Saw;A PWM;A Final;B Sine;B Tri;B Square;B PWM;B Final;Multiply;Envelope;Velocity;Mod wheel;Aftertouch;Sidechain
+47 mixASine v1 | Mix: A sine | range 0.0000..1.0000 step 0.0000 | default 0.0000
+48 mixATri v1 | Mix: A triangle | range 0.0000..1.0000 step 0.0000 | default 0.0000
+49 mixASaw v1 | Mix: A sawtooth | range 0.0000..1.0000 step 0.0000 | default 0.7000
+50 mixAPwm v1 | Mix: A PWM | range 0.0000..1.0000 step 0.0000 | default 0.0000
+51 mixAFinal v1 | Mix: A final | range 0.0000..1.0000 step 0.0000 | default 0.0000
+52 mixMult v1 | Mix: Multiply | range 0.0000..1.0000 step 0.0000 | default 0.0000
+53 mixBSine v1 | Mix: B sine | range 0.0000..1.0000 step 0.0000 | default 0.0000
+54 mixBTri v1 | Mix: B triangle | range 0.0000..1.0000 step 0.0000 | default 0.0000
+55 mixBSquare v1 | Mix: B square | range 0.0000..1.0000 step 0.0000 | default 0.0000
+56 mixBPwm v1 | Mix: B PWM | range 0.0000..1.0000 step 0.0000 | default 0.0000
+57 mixBFinal v1 | Mix: B final | range 0.0000..1.0000 step 0.0000 | default 0.0000
+58 envAttack v1 | Attack | range 0.0000..1.0000 step 0.0000 | default 0.1500
+59 envDecay v1 | Decay | range 0.0000..1.0000 step 0.0000 | default 0.5500
+60 envSustain v1 | Sustain | range 0.0000..1.0000 step 0.0000 | default 0.7000
+61 envRelease v1 | Release | range 0.0000..1.0000 step 0.0000 | default 0.5000
+62 ampMode v1 | Amp | range 0.0000..1.0000 step 1.0000 | default 1.0000 | choices Drone;Env
+63 volume v1 | Volume | range 0.0000..1.0000 step 0.0000 | default 0.6000
+64 quality v1 | Quality | range 0.0000..2.0000 step 1.0000 | default 1.0000 | choices 2x;4x;8x

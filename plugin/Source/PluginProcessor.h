@@ -5,6 +5,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <complicator/Engine.h>
+#include <complicator/Presets.h>
 #include "Parameters.h"
 
 class ComplicatorAudioProcessor : public juce::AudioProcessor
@@ -27,23 +28,29 @@ public:
     bool isMidiEffect() const override { return false; }
     double getTailLengthSeconds() const override { return 10.0; }   // the longest Release
 
-    int getNumPrograms() override { return 1; }                      // factory presets arrive in milestone 3
-    int getCurrentProgram() override { return 0; }
-    void setCurrentProgram (int) override {}
-    const juce::String getProgramName (int) override { return "Init"; }
+    // Programs = the Preset menu: 0 is "Init" (every control at its default), then the factory presets.
+    // A preset never touches Pitch Snap, Scale, Key or Quality.
+    int getNumPrograms() override { return 1 + complicator::presets::kNumFactory; }
+    int getCurrentProgram() override { return programIndex.load(); }
+    void setCurrentProgram (int) override;
+    const juce::String getProgramName (int) override;
     void changeProgramName (int, const juce::String&) override {}
+    // For the panel: the program last chosen (0 = Init), or -1 for settings loaded from a project saved before presets.
+    int shownPreset() const { return presetShown.load(); }
 
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState& getValueTreeState() { return apvts; }
+    complicator::Params readParams() const;                              // what the engine is given
+    void applyParams (const complicator::Params&);                       // sets the controls (all but Snap, Scale, Key, Quality)
     const complicator::Engine& getEngine() const { return engine; }
     void setScopeActive (bool on) { engine.setScopeActive (on); }     // the panel is open: record the scopes
 
 private:
-    complicator::Params readParams() const;
     void handleMidi (const juce::MidiMessage&);
 
+    std::atomic<int> programIndex { 0 }, presetShown { 0 };
     juce::AudioProcessorValueTreeState apvts;
     complicator::Engine engine;
     std::vector<float> sidechainMono;        // the sidechain input summed to mono, copied before the output is written

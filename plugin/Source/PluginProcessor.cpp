@@ -59,6 +59,73 @@ complicator::Params ComplicatorAudioProcessor::readParams() const
     return P;
 }
 
+namespace
+{
+    // The four controls a preset leaves alone: the player's own pitch and quality set-up.
+    bool isPlayersSetting (const juce::String& id)
+    {
+        return id == CxParams::pitchSnap || id == CxParams::pitchScale || id == CxParams::pitchKey || id == CxParams::quality;
+    }
+}
+
+void ComplicatorAudioProcessor::applyParams (const complicator::Params& P)
+{
+    namespace C = CxParams;       // (the member names keys, index, sync ... would hide the ids)
+    auto set = [this] (const char* id, float value)
+    {
+        if (auto* p = apvts.getParameter (id))
+            p->setValueNotifyingHost (p->convertTo0to1 (value));
+    };
+    auto flag = [] (bool b) { return b ? 1.0f : 0.0f; };
+
+    auto osc = [&] (bool isA, const complicator::OscParams& o)
+    {
+        set (isA ? C::aCoarse : C::bCoarse, o.coarse);   set (isA ? C::aFine : C::bFine, o.fine);
+        set (isA ? C::aPwm : C::bPwm, o.pwm);            set (isA ? C::aFm : C::bFm, o.fm);
+        set (isA ? C::aFmCurve : C::bFmCurve, (float) o.fmCurve);
+        set (isA ? C::aFold : C::bFold, o.fold);         set (isA ? C::aFoldCv : C::bFoldCv, o.foldCv);
+        set (isA ? C::aSym : C::bSym, o.sym);
+    };
+    osc (true, P.a);
+    osc (false, P.b);
+    set (C::aLfo, flag (P.aLfo));  set (C::bSub, (float) P.bSub);
+    set (C::keys, (float) P.keys); set (C::sync, (float) P.sync);
+    set (C::multDepth, P.multDepth); set (C::multMode, (float) P.multMode);
+    set (C::index, P.index);         set (C::indexCv, P.indexCv);
+    set (C::routeFmA, flag (P.routeFmA));     set (C::routeFmB, flag (P.routeFmB));
+    set (C::routeFoldA, flag (P.routeFoldA)); set (C::routeFoldB, flag (P.routeFoldB));
+    set (C::routeSymA, flag (P.routeSymA));   set (C::routeSymB, flag (P.routeSymB));
+    set (C::routePwm, (float) P.routePwm);
+    for (int k = 0; k < C::numPatch; ++k) set (C::patchIds[k], (float) P.patch[k]);
+    for (int k = 0; k < C::numMix; ++k)   set (C::mixIds[k], P.mix[k]);
+    set (C::envAttack, P.envAttack);  set (C::envDecay, P.envDecay);
+    set (C::envSustain, P.envSustain); set (C::envRelease, P.envRelease);
+    set (C::ampMode, (float) P.ampMode);
+    set (C::volume, P.volume);
+}
+
+void ComplicatorAudioProcessor::setCurrentProgram (int index)
+{
+    index = juce::jlimit (0, getNumPrograms() - 1, index);
+    if (index == 0)
+    {
+        for (auto* base : getParameters())
+            if (auto* p = dynamic_cast<juce::RangedAudioParameter*> (base))
+                if (! isPlayersSetting (p->paramID))
+                    p->setValueNotifyingHost (p->getDefaultValue());
+    }
+    else
+        applyParams (complicator::presets::factory (index - 1));
+    programIndex = index;
+    presetShown = index;
+}
+
+const juce::String ComplicatorAudioProcessor::getProgramName (int index)
+{
+    if (index == 0) return "Init";
+    return complicator::presets::name (index - 1);
+}
+
 void ComplicatorAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     engine.setParams (readParams());
@@ -145,7 +212,10 @@ juce::AudioProcessorEditor* ComplicatorAudioProcessor::createEditor()
 
 void ComplicatorAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    if (auto xml = apvts.copyState().createXml())
+    auto state = apvts.copyState();
+    if (presetShown.load() >= 0)
+        state.setProperty ("preset", presetShown.load(), nullptr);       // which Preset menu entry was chosen last
+    if (auto xml = state.createXml())
     {
         xml->setAttribute ("pluginVersion", JucePlugin_VersionString);
         copyXmlToBinary (*xml, destData);
@@ -156,7 +226,14 @@ void ComplicatorAudioProcessor::setStateInformation (const void* data, int sizeI
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
         if (xml->hasTagName (apvts.state.getType()))
-            apvts.replaceState (juce::ValueTree::fromXml (*xml));
+        {
+            const auto tree = juce::ValueTree::fromXml (*xml);
+            apvts.replaceState (tree);
+            // Projects saved before presets existed have no "preset" entry: the menu then shows "Custom".
+            const int shown = tree.hasProperty ("preset") ? juce::jlimit (0, getNumPrograms() - 1, (int) tree["preset"]) : -1;
+            presetShown = shown;
+            programIndex = juce::jmax (0, shown);
+        }
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

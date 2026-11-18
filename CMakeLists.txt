@@ -8,7 +8,7 @@ if(APPLE)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version")
 endif()
 
-project(Complicator VERSION 0.2.0 LANGUAGES C CXX)
+project(Complicator VERSION 0.3.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -16,6 +16,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(COMPLICATOR_BUILD_PLUGIN "Build the AU/VST3 plugin (needs JUCE)" ON)
 option(COMPLICATOR_BUILD_TESTS  "Build the engine self-tests" ON)
+option(COMPLICATOR_BUILD_CHECK  "Build ComplicatorCheck, the host-less test of the plugin layer (needs JUCE)" OFF)
 
 if(COMPLICATOR_BUILD_TESTS)
     enable_testing()
@@ -25,7 +26,7 @@ endif()
 add_subdirectory(engine)
 
 # 2) The plugin wrapper, controls and panel (JUCE).
-if(COMPLICATOR_BUILD_PLUGIN)
+if(COMPLICATOR_BUILD_PLUGIN OR COMPLICATOR_BUILD_CHECK)
     include(FetchContent)
     FetchContent_Declare(
         JUCE
@@ -34,5 +35,10 @@ if(COMPLICATOR_BUILD_PLUGIN)
         GIT_SHALLOW    TRUE
     )
     FetchContent_MakeAvailable(JUCE)
-    add_subdirectory(plugin)
+    if(COMPLICATOR_BUILD_PLUGIN)
+        add_subdirectory(plugin)
+    endif()
+    if(COMPLICATOR_BUILD_CHECK)
+        add_subdirectory(check)
+    endif()
 endif()

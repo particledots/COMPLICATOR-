@@ -3,6 +3,7 @@
 #include "complicator/Engine.h"
 #include "complicator/Nonlinear.h"
 #include "complicator/Pitch.h"
+#include "complicator/Presets.h"
 #include "complicator/Scales.h"
 
 #include <algorithm>
@@ -1146,6 +1147,449 @@ static void testCpuM2()
     CHECK (c1 < c3, "cpu: unused stages are skipped");
 }
 
+// ================================================================================================ milestone 3
+
+// Render at any sample rate (the tests above use kSr). 'quality' is Params::quality; the note is held the whole time.
+static std::vector<float> renderAt (Params p, double rate, int note, double seconds, double skip,
+                                    const std::vector<float>* sidechain = nullptr)
+{
+    Engine e;
+    e.setParams (p);
+    e.prepare (rate, kBlock);
+    e.noteOn (note, 1.0f);
+    const size_t total = (size_t) ((seconds + skip) * rate);
+    std::vector<float> out (total);
+    for (size_t pos = 0; pos < total; pos += kBlock)
+    {
+        const int n = (int) std::min<size_t> (kBlock, total - pos);
+        float* ch[1] = { out.data() + pos };
+        e.setParams (p);
+        e.process (ch, 1, n, sidechain != nullptr ? sidechain->data() + pos : nullptr);
+    }
+    return std::vector<float> (out.begin() + (long) (skip * rate), out.end());
+}
+
+static double aliasDbQ (Params p, int quality, int slot, int note)
+{
+    p.quality = quality;
+    p.mix[slot] = 1.0f;
+    p.a.pwm = 0.3f; p.b.pwm = 0.7f;
+    return aliasDb (renderAt (p, kSr, note, 0.75, 0.25), hz (note));
+}
+
+static void testQualityMenu()
+{
+    CHECK (Engine::factorFor (0) == 2 && Engine::factorFor (1) == 4 && Engine::factorFor (2) == 8, "quality to factor");
+    CHECK (Engine::factorFor (-1) == 4 && Engine::factorFor (7) == 4, "odd quality values read as 4x");
+    CHECK (Params().quality == 1, "4x is the default");
+
+    // The engine starts at the quality it is given, and reports it.
+    for (int q = 0; q < 3; ++q)
+    {
+        Params p = quiet();
+        p.quality = q;
+        Engine e;
+        e.setParams (p);
+        e.prepare (kSr, kBlock);
+        CHECK (e.oversamplingFactor() == (q == 0 ? 2 : q == 1 ? 4 : 8), "prepare at quality %d: factor %d", q, e.oversamplingFactor());
+    }
+
+    // Latency is the same (within a sample) at every quality, so changing it does not move the sound in time.
+    {
+        double lat[3];
+        for (int q = 0; q < 3; ++q)
+        {
+            Params p = quiet(); p.quality = q;
+            Engine e; e.setParams (p); e.prepare (kSr, kBlock);
+            lat[q] = e.latencySamples();
+        }
+        std::printf ("latency (samples at 48 kHz): 2x %.2f, 4x %.2f, 8x %.2f\n", lat[0], lat[1], lat[2]);
+        CHECK (std::fabs (lat[0] - lat[1]) < 1.0 && std::fabs (lat[2] - lat[1]) < 1.0, "latency differs between qualities");
+    }
+
+    // Same pitch, same loudness, less aliasing with each step.
+    {
+        double al[3][5];
+        const int slots[5] = { MixASaw, MixAPwm, MixBSquare, MixBTri, MixAFinal };
+        const int notes[5] = { 100, 100, 100, 100, 96 };
+        for (int q = 0; q < 3; ++q)
+            for (int k = 0; k < 5; ++k)
+            {
+                Params p = quiet();
+                if (slots[k] == MixAFinal) p.a.fold = 1.0f;
+                al[q][k] = aliasDbQ (p, q, slots[k], notes[k]);
+            }
+        std::printf ("aliasing by quality (A saw / A pulse / B square / B tri note 100, folded sine note 96), dB:\n"
+                     "   2x: %.1f %.1f %.1f %.1f %.1f\n   4x: %.1f %.1f %.1f %.1f %.1f\n   8x: %.1f %.1f %.1f %.1f %.1f\n",
+                     al[0][0], al[0][1], al[0][2], al[0][3], al[0][4], al[1][0], al[1][1], al[1][2], al[1][3], al[1][4],
+                     al[2][0], al[2][1], al[2][2], al[2][3], al[2][4]);
+        for (int k = 0; k < 5; ++k)
+        {
+            const bool fold = k == 4;
+            CHECK (al[0][k] < (fold ? -30.0 : -45.0), "2x aliasing %.1f dB (output %d)", al[0][k], k);
+            CHECK (al[1][k] < (fold ? -50.0 : -65.0), "4x aliasing %.1f dB (output %d)", al[1][k], k);
+            CHECK (al[2][k] < (fold ? -65.0 : -80.0), "8x aliasing %.1f dB (output %d)", al[2][k], k);
+            if (k != 3)    // the triangle is already near the floor of this measurement at 2x, so it is exempt from the step check
+                CHECK (al[1][k] < al[0][k] - 8.0 && al[2][k] < al[1][k] - 8.0, "each quality step is at least 8 dB cleaner (output %d)", k);
+        }
+
+        double level[3], freq[3];
+        for (int q = 0; q < 3; ++q)
+        {
+            Params p = quiet(); p.quality = q;
+            p.mix[MixASine] = 0.8f; p.mix[MixBTri] = 0.6f; p.mix[MixBSquare] = 0.5f;
+            p.a.coarse = 7.0f;
+            auto v = renderAt (p, kSr, 57, 1.0, 0.25);
+            level[q] = rms (v);
+            Params s = quiet(); s.quality = q; s.mix[MixASine] = 1.0f;
+            freq[q] = risingCrossingsHz (renderAt (s, kSr, 60, 1.0, 0.25));
+        }
+        for (int q : { 0, 2 })
+        {
+            CHECK (std::fabs (20.0 * std::log10 (level[q] / level[1])) < 0.5, "level at quality %d differs from 4x by %.2f dB", q, 20.0 * std::log10 (level[q] / level[1]));
+            CHECK (std::fabs (freq[q] - hz (60)) < 0.5, "pitch at quality %d: %.2f Hz", q, freq[q]);
+        }
+    }
+
+    // Changing the quality while playing: a short fade out and in, no click, and the sound comes back at the same level.
+    for (int variant = 0; variant < 2; ++variant)
+    {
+        Params p = quiet();
+        if (variant == 0) { p.mix[MixASaw] = 0.8f; p.mix[MixBTri] = 0.6f; p.mix[MixAFinal] = 0.7f; p.a.fold = 0.8f; }
+        else              { p = presets::factory (2); p.ampMode = AmpDrone; }
+        Engine ref, e;
+        ref.setParams (p); ref.prepare (kSr, kBlock); ref.noteOn (57, 1.0f);
+        e.setParams (p);   e.prepare (kSr, kBlock);   e.noteOn (57, 1.0f);
+        const int sequence[] = { 1, 0, 2, 1, 2, 0, 0, 2, 1 };
+        std::vector<float> a, b;
+        auto step = [&] (int blocks, int q)
+        {
+            Params pq = p; pq.quality = q;
+            for (int i = 0; i < blocks; ++i)
+            {
+                float x[kBlock], y[kBlock]; float* cx[1] = { x }; float* cy[1] = { y };
+                ref.setParams (p); ref.process (cx, 1, kBlock);
+                e.setParams (pq);  e.process (cy, 1, kBlock);
+                a.insert (a.end(), x, x + kBlock); b.insert (b.end(), y, y + kBlock);
+            }
+        };
+        step (40, 1);
+        int last = 1;
+        for (int q : sequence) { step (30, q); last = q; }
+        step (60, 1);
+        CHECK (e.oversamplingFactor() == 4, "back at 4x (%d)", e.oversamplingFactor());
+        (void) last;
+        double biggest = 0.0, steady = 0.0, mx = 0.0;
+        for (size_t i = 2000; i < b.size(); ++i) { biggest = std::max (biggest, (double) std::fabs (b[i] - b[i - 1])); steady = std::max (steady, (double) std::fabs (a[i] - a[i - 1])); mx = std::max (mx, (double) std::fabs (b[i])); }
+        std::printf ("quality changes while playing (variant %d): biggest step %.4f, steady %.4f\n", variant, biggest, steady);
+        CHECK (std::isfinite (mx) && mx < 4.0, "quality changes: bounded (%g)", mx);
+        CHECK (biggest < 1.5 * steady + 0.005, "quality changes click: step %.4f vs steady %.4f", biggest, steady);
+        const size_t n = a.size();
+        std::vector<float> ta (a.end() - 4000, a.end()), tb (b.end() - 4000, b.end());
+        CHECK (std::fabs (20.0 * std::log10 (rms (tb) / rms (ta))) < 0.5, "level after quality changes %.2f dB off", 20.0 * std::log10 (rms (tb) / rms (ta)));
+        (void) n;
+        // while a change is in progress the sound is only ever quieter, never louder, than the steady sound by much
+        double fadeMax = 0.0;
+        for (size_t i = 3000; i < b.size() - 4000; ++i) fadeMax = std::max (fadeMax, (double) std::fabs (b[i]));
+        CHECK (fadeMax < 1.6 * peak (a), "quality changes: peak %.3f vs steady peak %.3f", fadeMax, peak (a));
+    }
+
+    // Heavy random automation, all controls, quality included (the heavy-automation tests above run at 4x).
+    for (double rate : { 44100.0, 48000.0, 96000.0 })
+    {
+        std::mt19937 g (31u + (unsigned) rate);
+        auto U = [&] (float a, float b) { return std::uniform_real_distribution<float> (a, b) (g); };
+        auto I = [&] (int a, int b) { return std::uniform_int_distribution<int> (a, b) (g); };
+        Engine e;
+        Params p = quiet();
+        e.setParams (p);
+        e.prepare (rate, kBlock);
+        e.noteOn (48, 1.0f);
+        bool finite = true;
+        double maxAbs = 0.0;
+        for (int b = 0; b < 700; ++b)
+        {
+            if (b % 3 == 0)
+            {
+                for (auto* o : { &p.a, &p.b }) { o->coarse = U (-30, 30); o->fine = U (-1, 1); o->pwm = U (0, 1); o->fm = U (0, 1); o->fmCurve = I (0, 2); o->fold = U (0, 1); o->foldCv = U (-1, 1); o->sym = U (-1, 1); }
+                p.sync = I (0, 2); p.bSub = I (0, 2); p.aLfo = I (0, 6) == 0; p.keys = I (0, 2);
+                p.multDepth = U (0, 1); p.multMode = I (0, 2); p.index = U (0, 1); p.indexCv = U (-1, 1);
+                p.routeFmA = I (0, 1); p.routeFoldB = I (0, 1); p.routeSymA = I (0, 1); p.routePwm = I (0, 2);
+                for (int k = 0; k < kNumInputs; ++k) p.patch[k] = I (0, 2) == 0 ? I (0, kNumSources - 1) : 0;
+                for (auto& m : p.mix) m = U (0, 1);
+            }
+            if (b % 5 == 0) p.quality = I (0, 2);             // changes faster than the fade completes, too
+            if (b % 41 == 0) e.noteOn (36 + I (0, 48), 0.8f);
+            float buf[kBlock]; float* ch[1] = { buf };
+            e.setParams (p);
+            e.process (ch, 1, kBlock);
+            for (float x : buf) { if (! std::isfinite (x)) finite = false; maxAbs = std::max (maxAbs, (double) std::fabs (x)); }
+        }
+        CHECK (finite, "heavy automation incl. quality (%.0f Hz): finite", rate);
+        CHECK (maxAbs < 16.0, "heavy automation incl. quality (%.0f Hz): bounded (max %.2f)", rate, maxAbs);
+        std::printf ("heavy automation incl. Quality, %.0f Hz: max output %.2f\n", rate, maxAbs);
+    }
+}
+
+// Soft sync at simple ratios. A is at 220 Hz; the engine runs at 44 kHz so that one period of A is exactly 200 samples.
+// Osc B, tuned a little flat of a ratio, must settle into the pattern that ratio really has: it repeats after
+// 'denominator' periods of A (2 for a fifth: 3 cycles of B in 2 of A), not after twice that.
+static void testSoftSyncRatios()
+{
+    struct Ratio { const char* name; double r; int period; };
+    const Ratio ratios[] = { { "fifth 3:2", 1.5, 2 }, { "fourth 4:3", 4.0 / 3.0, 3 }, { "major third 5:4", 1.25, 4 },
+                             { "sixth 5:3", 5.0 / 3.0, 3 }, { "octave 2:1", 2.0, 1 }, { "unison", 1.0, 1 },
+                             { "octave down 1:2", 0.5, 2 } };
+    for (const auto& r : ratios)
+    {
+        for (int note : { 57, 45 })           // A at 220 Hz and 110 Hz
+        {
+            const int per = note == 57 ? 200 : 400;
+            for (double cents : { -60.0, -25.0, -10.0, -2.0 })
+            {
+                Params p = quiet();
+                p.mix[MixBTri] = 1.0f;
+                p.sync = SyncSoft;
+                p.b.coarse = (float) (12.0 * std::log2 (r.r) + cents / 100.0);
+                auto v = renderAt (p, 44000.0, note, 1.0, cents > -5.0 ? 10.0 : 3.0);   // a tiny detune takes longer to settle
+                auto dbAtLag = [&] (int periods)
+                {
+                    const int lag = per * periods;
+                    double err = 0.0, pw = 0.0;
+                    for (int i = 0; i < 20000; ++i) { const double d = v[(size_t) i] - v[(size_t) (i + lag)]; err += d * d; pw += (double) v[(size_t) i] * v[(size_t) i]; }
+                    return 10.0 * std::log10 (err / pw + 1.0e-20);
+                };
+                const double natural = dbAtLag (r.period);
+                CHECK (natural < -60.0, "soft sync %s at %.0f Hz, %+.0f cents: repeats after %d periods only to %.1f dB", r.name, hz (note), cents, r.period, natural);
+                if (cents == -10.0 && note == 57) std::printf ("soft sync %-16s %+4.0f cents: repeats after %d period(s) of A to %.1f dB\n", r.name, cents, r.period, natural);
+            }
+        }
+    }
+
+    // A sharp B is not pulled in: it keeps beating (the module does not lock a sharp oscillator either).
+    {
+        Params p = quiet();
+        p.mix[MixBTri] = 1.0f; p.sync = SyncSoft;
+        p.b.coarse = (float) (12.0 * std::log2 (1.5) + 0.40);
+        auto v = renderAt (p, 44000.0, 57, 1.0, 3.0);
+        double err = 0.0, pw = 0.0;
+        for (int i = 0; i < 20000; ++i) { const double d = v[(size_t) i] - v[(size_t) (i + 400)]; err += d * d; pw += (double) v[(size_t) i] * v[(size_t) i]; }
+        const double db = 10.0 * std::log10 (err / pw + 1.0e-20);
+        CHECK (db > -20.0, "a sharp fifth should keep beating (%.1f dB)", db);
+    }
+
+    // The jump the pull makes is small once locked, and the output stays band-limited and bounded.
+    {
+        Params p = quiet();
+        p.mix[MixBTri] = 1.0f; p.mix[MixBSine] = 0.5f; p.sync = SyncSoft;
+        p.b.coarse = (float) (12.0 * std::log2 (1.5) - 0.10);
+        auto v = renderAt (p, kSr, 69, 1.0, 3.0);
+        double ms = 0.0;
+        for (size_t i = 1; i < v.size(); ++i) ms = std::max (ms, (double) std::fabs (v[i] - v[i - 1]));
+        std::printf ("soft sync fifth, A 440 Hz: biggest step between samples %.3f, peak %.3f\n", ms, peak (v));
+        CHECK (peak (v) < 1.2, "soft sync fifth: bounded (%.3f)", peak (v));
+        CHECK (ms < 0.6, "soft sync fifth: biggest step %.3f", ms);
+        const double al = aliasDb (v, hz (69) / 2.0);
+        std::printf ("soft sync fifth, A 440 Hz: non-harmonic energy %.1f dB\n", al);
+        CHECK (al < -50.0, "soft sync fifth: aliasing %.1f dB", al);
+    }
+
+    // The same pull works through the Patch row (any source into Soft sync) and at every quality.
+    for (int q = 0; q < 3; ++q)
+    {
+        Params p = quiet();
+        p.quality = q;
+        p.mix[MixBTri] = 1.0f;
+        p.patch[InSoftSync] = SrcASaw;
+        p.b.coarse = (float) (12.0 * std::log2 (1.5) - 0.20);
+        auto v = renderAt (p, 44000.0, 57, 1.0, 3.0);
+        double err = 0.0, pw = 0.0;
+        for (int i = 0; i < 20000; ++i) { const double d = v[(size_t) i] - v[(size_t) (i + 400)]; err += d * d; pw += (double) v[(size_t) i] * v[(size_t) i]; }
+        const double db = 10.0 * std::log10 (err / pw + 1.0e-20);
+        CHECK (db < -60.0, "patched soft sync fifth at quality %d: %.1f dB", q, db);
+    }
+}
+
+// The fundamental of a signal by autocorrelation (for presets: which pitch do you hear?).
+static double fundamentalHz (const std::vector<float>& v, double rate, double lo, double hi)
+{
+    const size_t n = std::min<size_t> (v.size(), 16384);
+    const int minLag = (int) (rate / hi), maxLag = (int) (rate / lo);
+    double best = 0.0; int bestLag = minLag;
+    std::vector<double> ac ((size_t) maxLag + 2, 0.0);
+    for (int lag = minLag; lag <= maxLag; ++lag)
+    {
+        double s = 0.0;
+        for (size_t i = 0; i + (size_t) lag < n; ++i) s += (double) v[i] * v[i + (size_t) lag];
+        ac[(size_t) lag] = s;
+        best = std::max (best, s);
+    }
+    for (int lag = minLag; lag <= maxLag; ++lag)          // the first lag that is nearly as good as the best
+        if (ac[(size_t) lag] > 0.9 * best && ac[(size_t) lag] >= ac[(size_t) lag - 1] && ac[(size_t) lag] >= ac[(size_t) lag + 1]) { bestLag = lag; break; }
+    return rate / (double) bestLag;
+}
+
+static void testPresets()
+{
+    CHECK (presets::kNumFactory == 9, "factory preset count");
+    // distinct names, distinct sounds
+    for (int i = 0; i < presets::kNumFactory; ++i)
+    {
+        CHECK (presets::name (i)[0] != 0 && presets::source (i)[0] != 0, "preset %d has a name and a source", i);
+        for (int j = i + 1; j < presets::kNumFactory; ++j)
+        {
+            CHECK (std::string (presets::name (i)) != presets::name (j), "preset names %d and %d are the same", i, j);
+            const Params a = presets::factory (i), b = presets::factory (j);
+            bool same = a.keys == b.keys && a.sync == b.sync && a.bSub == b.bSub && a.multMode == b.multMode && a.aLfo == b.aLfo
+                     && a.a.fold == b.a.fold && a.b.fold == b.b.fold && a.a.coarse == b.a.coarse && a.b.coarse == b.b.coarse;
+            for (int k = 0; k < kNumMix; ++k) same = same && a.mix[k] == b.mix[k];
+            for (int k = 0; k < kNumInputs; ++k) same = same && a.patch[k] == b.patch[k];
+            CHECK (! same, "presets %d and %d are the same patch", i, j);
+        }
+    }
+
+    // The reference level: the Init patch's sawtooth.
+    const double initLevel = rms (renderAt (presets::init(), kSr, 60, 1.0, 0.6));
+
+    for (int i = 0; i < presets::kNumFactory; ++i)
+    {
+        const Params p = presets::factory (i);
+        const bool sidechainPreset = p.patch[InSymA] == SrcSidechain;
+
+        // every setting inside its range
+        for (const OscParams* o : { &p.a, &p.b })
+            CHECK (std::fabs (o->coarse) <= 48.0f && std::fabs (o->fine) <= 1.0f && o->pwm >= 0 && o->pwm <= 1 && o->fm >= 0 && o->fm <= 1
+                   && o->fold >= 0 && o->fold <= 1 && std::fabs (o->foldCv) <= 1 && std::fabs (o->sym) <= 1, "preset %d: a setting is out of range", i);
+        for (int k = 0; k < kNumMix; ++k) CHECK (p.mix[k] >= 0.0f && p.mix[k] <= 1.0f, "preset %d: mixer level %d", i, k);
+        CHECK (p.volume > 0.0f && p.volume <= 1.0f, "preset %d: volume", i);
+        CHECK (p.quality == 1, "preset %d: leaves Quality at the default value of Params", i);
+
+        // The Final levels: if a wavefolder is listened to, it is either in the mix or patched into something that is.
+        bool anyMixed = false;
+        for (int k = 0; k < kNumMix; ++k) anyMixed = anyMixed || p.mix[k] > 0.0f;
+        CHECK (anyMixed, "preset %d: nothing is mixed", i);
+        if (p.patch[InModulator] == SrcAFinal || p.patch[InCarrier] == SrcAFinal || p.patch[InCarrier] == SrcBFinal)
+            CHECK (p.mix[MixMult] > 0.0f, "preset %d: uses a Final in the multiplier but the Multiply level is 0", i);
+
+        // Sound: finite, bounded, audible, about the same loudness, at every kind of note and sample rate.
+        for (double rate : { 44100.0, 48000.0, 96000.0 })
+            for (int note : { 36, 60, 84 })
+            {
+                std::vector<float> sc;
+                if (sidechainPreset)
+                {
+                    sc.resize ((size_t) (2.2 * rate));
+                    for (size_t k = 0; k < sc.size(); ++k) sc[k] = 0.3f * (float) std::sin (2.0 * 3.14159265358979 * 1000.0 * (double) k / rate);
+                }
+                auto v = renderAt (p, rate, note, 1.2, 0.6, sidechainPreset ? &sc : nullptr);
+                bool finite = true;
+                for (float x : v) finite = finite && std::isfinite (x);
+                const double level = rms (v), pk = peak (v);
+                const double dB = 20.0 * std::log10 (level / initLevel);
+                CHECK (finite, "preset %d (%s) at %.0f Hz, note %d: not finite", i, presets::name (i), rate, note);
+                CHECK (pk < 1.0, "preset %d (%s) at %.0f Hz, note %d: peak %.2f", i, presets::name (i), rate, note, pk);
+                CHECK (level > 0.01, "preset %d (%s) at %.0f Hz, note %d: silent (rms %.4f)", i, presets::name (i), rate, note, level);
+                CHECK (dB > 1.0 && dB < 9.0, "preset %d (%s) at %.0f Hz, note %d: %.1f dB against the Init patch (expected about +4)", i, presets::name (i), rate, note, dB);
+                if (rate == kSr && note == 60) std::printf ("preset %-26s rms %.1f dB (Init %.1f dB), peak %.2f\n", presets::name (i), 20.0 * std::log10 (level), 20.0 * std::log10 (initLevel), pk);
+            }
+
+        // The sidechain preset is silent without a sidechain signal (it is a wavefolder for outside audio).
+        if (sidechainPreset)
+            CHECK (rms (renderAt (p, kSr, 60, 1.0, 0.6)) < 1.0e-3, "preset %d without a sidechain signal is silent", i);
+
+        // Same settings, same sound.
+        auto v1 = renderAt (p, kSr, 60, 0.3, 0.3), v2 = renderAt (p, kSr, 60, 0.3, 0.3);
+        CHECK (v1 == v2 || sidechainPreset, "preset %d is not repeatable", i);
+
+        // Every preset also works at the other qualities.
+        for (int q : { 0, 2 })
+        {
+            Params pq = p; pq.quality = q;
+            std::vector<float> sc;
+            if (sidechainPreset) { sc.assign ((size_t) (1.8 * kSr), 0.0f); for (size_t k = 0; k < sc.size(); ++k) sc[k] = 0.3f * (float) std::sin (2.0 * 3.14159265358979 * 1000.0 * (double) k / kSr); }
+            auto v = renderAt (pq, kSr, 60, 1.0, 0.6, sidechainPreset ? &sc : nullptr);
+            auto v4 = renderAt (p, kSr, 60, 1.0, 0.6, sidechainPreset ? &sc : nullptr);
+            CHECK (std::fabs (20.0 * std::log10 (rms (v) / rms (v4))) < 1.5, "preset %d at quality %d: %.2f dB from 4x", i, q, 20.0 * std::log10 (rms (v) / rms (v4)));
+        }
+    }
+
+    // A few things the presets are meant to do, as the manual describes them.
+    {   // Formant Voice: the pitch you hear is the note you play (Osc B two octaves up, its sub square two octaves down).
+        const Params p = presets::factory (3);
+        for (int note : { 48, 55, 60 })
+        {
+            auto v = renderAt (p, kSr, note, 0.8, 0.5);
+            const double f = fundamentalHz (v, kSr, 40.0, 1200.0);
+            std::printf ("Formant Voice, note %d (%.1f Hz): fundamental %.1f Hz\n", note, hz (note), f);
+            CHECK (std::fabs (f / hz (note) - 1.0) < 0.02, "Formant Voice note %d: %.1f Hz instead of %.1f", note, f, hz (note));
+        }
+    }
+    {   // Spooky Theremin: Osc B's sine at the note's pitch, with a slow wobble.
+        const Params p = presets::factory (4);
+        auto v = renderAt (p, kSr, 60, 1.5, 0.8);
+        const double f = fundamentalHz (v, kSr, 100.0, 1000.0);
+        CHECK (std::fabs (f / hz (60) - 1.0) < 0.03, "Spooky Theremin pitch %.1f Hz", f);
+    }
+    {   // Complete Voice: silent without a note (the multiplier is the VCA and the envelope is closed); loud with one.
+        const Params p = presets::factory (1);
+        Engine e; e.setParams (p); e.prepare (kSr, kBlock);
+        std::vector<float> idle (kBlock * 20);
+        for (int b = 0; b < 20; ++b) { float* ch[1] = { idle.data() + b * kBlock }; e.setParams (p); e.process (ch, 1, kBlock); }
+        CHECK (peak (idle) < 1.0e-4, "Complete Voice makes sound without a note (%.5f)", peak (idle));
+    }
+    {   // Wavefolder (sidechain in): at the Symmetry knob's full scale, a quiet signal passes unfolded and a loud one folds.
+        const Params p = presets::factory (8);
+        auto render = [&] (double amp)
+        {
+            std::vector<float> sc ((size_t) (1.5 * kSr));
+            for (size_t k = 0; k < sc.size(); ++k) sc[k] = (float) (amp * std::sin (2.0 * 3.14159265358979 * 200.0 * (double) k / kSr));
+            Params q = p; q.volume = std::sqrt (0.5f);              // gain 1, so the preset's level is what is measured
+            return renderAt (q, kSr, 60, 1.0, 0.4, &sc);
+        };
+        auto quietIn = render (0.1), loudIn = render (0.6);
+        const double qs = fundamentalShare (quietIn, 200.0), ls = fundamentalShare (loudIn, 200.0);
+        std::printf ("Wavefolder preset: share of the 200 Hz sine in the output: quiet input %.3f, loud input %.3f\n", qs, ls);
+        CHECK (qs > 0.9, "quiet input should pass nearly unchanged (%.3f)", qs);
+        CHECK (ls < 0.8, "loud input should be folded (%.3f)", ls);
+    }
+}
+
+static void testCpuM3()
+{
+    Params plain = quiet();
+    plain.mix[MixASaw] = 0.8f; plain.mix[MixBSquare] = 0.8f; plain.a.fm = 0.5f; plain.b.fm = 0.5f;
+
+    Params full = quiet();
+    for (auto& m : full.mix) m = 0.8f;
+    full.a.fm = 0.6f; full.b.fm = 0.4f; full.sync = SyncHard; full.bSub = 1;
+    full.a.fold = 0.9f; full.b.fold = 0.9f; full.a.sym = 0.4f; full.index = 0.7f; full.multDepth = 1.0f; full.multMode = 1;
+    full.routeFmA = full.routeFoldA = full.routeSymB = true; full.routePwm = 1;
+
+    Params loops = full;
+    loops.patch[InFmA] = SrcAFinal; loops.patch[InFoldB] = SrcMultiply; loops.patch[InModulator] = SrcBFinal;
+    loops.patch[InSoftSync] = SrcASaw; loops.patch[InHardSync] = SrcBSquare; loops.patch[InSymA] = SrcSidechain;
+
+    double c[3][3];
+    for (int q = 0; q < 3; ++q)
+    {
+        Params a = plain, b = full, d = loops;
+        a.quality = b.quality = d.quality = q;
+        c[q][0] = cpuPercent (a, false, 6);
+        c[q][1] = cpuPercent (b, true, 6);
+        c[q][2] = cpuPercent (d, true, 6);
+    }
+    std::printf ("cpu by quality (%% of one core, 48 kHz): oscillators only / everything (panel open) / everything with loops\n"
+                 "   2x: %.1f / %.1f / %.1f\n   4x: %.1f / %.1f / %.1f\n   8x: %.1f / %.1f / %.1f\n",
+                 c[0][0], c[0][1], c[0][2], c[1][0], c[1][1], c[1][2], c[2][0], c[2][1], c[2][2]);
+    for (int k = 0; k < 3; ++k)
+    {
+        CHECK (c[0][k] < 10.0, "2x cpu %.1f%%", c[0][k]);
+        CHECK (c[1][k] < 15.0, "4x cpu %.1f%%", c[1][k]);
+        CHECK (c[2][k] < 30.0, "8x cpu %.1f%%", c[2][k]);
+        CHECK (c[2][k] > c[1][k] && c[1][k] > c[0][k], "each quality step costs more (%.1f %.1f %.1f)", c[0][k], c[1][k], c[2][k]);
+    }
+}
+
 int main()
 {
     testPitchRules();
@@ -1166,6 +1610,10 @@ int main()
     testSwitching();
     testHeavyAutomationM2();
     testCpuM2();
+    testQualityMenu();
+    testSoftSyncRatios();
+    testPresets();
+    testCpuM3();
     std::printf ("engine tests: %d checks, %d failed\n", checks, failures);
     return failures == 0 ? 0 : 1;
 }

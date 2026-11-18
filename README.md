@@ -4,14 +4,58 @@ An original AU / VST3 instrument for Logic Pro: a complex oscillator with two co
 Instruō Cš-L. It is not a copy, contains no Instruō code or artwork, and is not affiliated with Instruō. The Cš-L is an
 analog module with no published firmware; its manual was used only to understand what the controls do.
 
-Status: **milestone 2 of 3 done (tested in Logic on 2026-11-17: all test steps worked as described, nothing blew up,
-no clicks or dropouts under heavy automation, the panel stays in proportion when resized, and the Side Chain menu is
-available for COMPLICATOR in Logic).** Milestone 1 (version 0.1.0) was tested on both test Macs (M4 Mac mini with Logic
-11.2.2 and Intel Mac with Logic 10.7.8). Version 0.2.0.
+Status: **milestone 3 of 3 built (version 0.3.0), waiting for the Logic test.** Milestone 2 (0.2.0) and milestone 1
+(0.1.0) were tested in Logic on both test Macs (M4 Mac mini with Logic 11.2.2 and Intel Mac with Logic 10.7.8).
 
-Test notes: the Logic CPU meter shows no numbers, so the Intel Mac load is only Bryn's estimate (5% or less with
-everything on). The Final A / Final B mixer levels start at 0, so the folders are silent until a Final level is raised
-(the Wavefold fader only changes the Final output); Bryn decided to keep it that way.
+Test notes: the Logic CPU meter shows no numbers on the Intel Mac, so its load is measured with Activity Monitor
+(see "CPU and the Quality menu"). The Final A / Final B mixer levels start at 0, so the folders are silent until a
+Final level is raised; every factory preset sets the Final levels it needs.
+
+## What is new in milestone 3
+
+- **Factory presets**: the Preset menu is live. "Init" resets every control except Pitch Snap, Scale, Key and Quality.
+  The nine factory presets are my own settings that rebuild the example patches of the Cš-L manual. A preset never
+  touches Pitch Snap, Scale, Key or Quality, and sets its own Final levels and Volume (all about the same loudness).
+  A project remembers which preset was chosen; if you then move a knob the menu still shows it, and a project saved
+  before 0.3.0 shows "Custom".
+
+  | Preset | Rebuilds the manual's example |
+  |---|---|
+  | East Coast Voice | East Coast voice (Osc B with sub, PWM and envelope) |
+  | Complete Voice | A complete voice (folder, multiplier as the VCA, envelope) |
+  | Synced Growl | Hard sync growl through both folders and the multiplier |
+  | Formant Voice | Formant voice (hard sync, Osc A two octaves up, sub two down) |
+  | Spooky Theremin | Spooky theremin (Osc A as LFO, Osc B sine) |
+  | Wavefold Multiply | Wavefolded oscillator through the multiplier |
+  | Racket Voice | Racket (both oscillators FM-ed, PWM routed from the Index) |
+  | Five Modules | The five-module patch |
+  | Wavefolder (sidechain in) | The folder used on outside audio: needs a Side Chain source |
+
+- **Quality menu** (2x / 4x / 8x oversampling): the parameter was there since 0.1.0 and is unchanged. **4x stays the
+  default. 8x is marked "heavy"** in the menu, and its label turns amber when chosen. Changing it while playing fades
+  the sound out and in over about 4 ms, with no click, and the plugin's latency stays almost the same (about 19 samples).
+- **Soft sync** now pulls Osc B only half way to the peak at each turn. A plain fifth (and a fourth, a third, a sixth)
+  now locks into the pattern the interval really has, not twice as long. Projects that use Soft sync sound slightly
+  different, by design; everything else is bit-identical to 0.2.0 at 4x.
+- **Old projects**: the parameter files are byte-identical to 0.1.0 / 0.2.0. `ComplicatorCheck` (a console program
+  built in the Actions run, `check/`) compares the control list with a stored copy, restores 0.1.0 / 0.2.0 saved
+  states, and exercises presets, menus and the panel.
+
+### CPU and the Quality menu
+
+Measured on the GitHub Linux machine, % of one core at 48 kHz, a sustained patch (guide only; Intel Macs differ):
+
+| Quality | Oscillators only | Everything, panel open | Everything plus loops |
+|---|---|---|---|
+| 2x | 1.0 | 1.4 | 1.3 |
+| 4x (default) | 1.8 | 2.4 | 2.4 |
+| 8x (heavy) | 3.3 | 4.4 | 4.4 |
+
+Aliasing (non-harmonic energy, high notes): 2x about -53 dB, 4x about -74 dB, 8x about -88 dB.
+
+Reading it on the Intel Mac: open Activity Monitor, CPU tab, find **Logic Pro** (the plugin runs inside it), and read
+**% CPU** (100% = one core). Play a held note on a Drone patch at 2x, 4x and 8x, and subtract the figure with
+no note playing.
 
 ## What is new in milestone 2
 
@@ -87,10 +131,7 @@ Signals inside are plus/minus 1 (the module's plus/minus 5 V). Envelope, velocit
 
 ## Coming
 
-- **Milestone 3**: factory presets, a Quality menu (2× / 4× / 8×), CPU checks on the Intel Mac, old-project check, pluginval clean, polish.
-
-The Preset and Quality controls are already on the panel, dimmed and marked M3, and already stored in projects: every
-parameter was fixed in the first build, so projects saved now will open unchanged later.
+Nothing more is planned: milestone 3 completes the plan. Cosmetic changes to the panel (knob looks) may follow.
 
 ## Folders
 
@@ -98,6 +139,7 @@ parameter was fixed in the first build, so projects saved now will open unchange
 |---|---|
 | `engine/` | The audio engine. Plain C++, no plugin code: oscillators, band-limiting, wavefolder / multiplier maths, decimation filter, pitch rules, envelope, Patch row. Reusable for later plugins. |
 | `plugin/` | The plugin wrapper: what Logic sees, the list of controls (`Parameters`), and the panel (`PluginEditor`, `Controls`, `Style`). |
+| `check/` | `ComplicatorCheck`: a console program that tests the plugin layer (parameters, presets, saved states, panel) without a host. |
 | `tools/install/` | The same installer as the other particledots plugins (unchanged). |
 | `.github/workflows/` | The automatic build. |
 

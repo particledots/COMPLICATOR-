@@ -1,6 +1,6 @@
 // The COMPLICATOR panel. Laid out at 680 x 664 units exactly like the approved draft (2026-11-17) and scaled to the
 // window (drag the corner to resize; the shape stays the same).
-// Controls that arrive in a later milestone are already in place, dimmed and labelled with that milestone.
+// (Since milestone 3 nothing is dimmed any more: every control is live.)
 
 #pragma once
 
@@ -25,6 +25,8 @@ private:
     CxMenu& menu (const char* id, const juce::String& prefix, juce::Rectangle<int> r, bool dim = false);
     void dimIt (juce::Component&);
     void updateScope (int which);
+    void updatePresetMenu();
+    void updateQualityMenu();
 
     ComplicatorAudioProcessor& proc;
     CxLookAndFeel lnf;
@@ -34,6 +36,9 @@ private:
     juce::Slider foldA, foldB;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> foldAAtt, foldBAtt;
     juce::ComboBox presetMenu;
+    CxMenu* qualityMenu = nullptr;
+    const std::atomic<float>* qualityParam = nullptr;
+    int shownPresetId = -2, shownQuality = -1;
     float shownA = 0.0f, shownB = 0.0f;
     static constexpr int kScopeW = 212;                          // scope columns (panel units)
     std::array<std::array<float, kScopeW + 1>, 2> scopeLine {};  // Final A / Final B, -1..+1

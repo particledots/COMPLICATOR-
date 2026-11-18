@@ -80,9 +80,12 @@ Engine::Engine()
 void Engine::prepare (double sampleRate, int /*maxBlockSize*/)
 {
     sr = sampleRate > 0.0 ? sampleRate : 48000.0;
-    factor = 4;                                    // fixed in milestone 1; the Quality menu (M3) will choose 2, 4 or 8
+    for (int k = 0; k < 3; ++k) decim[k].prepare (sr, 1 << (k + 1));    // 2x, 4x, 8x
+    factor = factorFor (params.quality);
+    decimIdx = factor == 2 ? 0 : (factor == 4 ? 1 : 2);
     osRate = sr * factor;
-    decim.prepare (sr, factor);
+    qGain = 1.0f;
+    qStep = (float) (1.0 / (0.004 * sr));                // 4 ms fade when the quality changes
 
     const float knob = smoothCoef (0.015, sr);
     for (int k = 0; k < 2; ++k)
@@ -133,11 +136,21 @@ void Engine::clearFeedback()
     for (float& h : scHist) h = 0.0f;
 }
 
+void Engine::setFactor (int f)
+{
+    factor = f;
+    decimIdx = f == 2 ? 0 : (f == 4 ? 1 : 2);
+    osRate = sr * factor;
+    fadeStep = (float) (1.0 / (kFadeSeconds * osRate));
+    decim[decimIdx].reset();
+    clearFeedback();
+}
+
 void Engine::reset()
 {
     oscA.reset();
     oscB.reset();
-    decim.reset();
+    for (auto& d : decim) d.reset();
     env = Envelope();
     envLast = 0.0f;
     sAmp.v = 0.0f;
@@ -287,8 +300,9 @@ void Engine::process (float* const* out, int numChannels, int numSamples, const 
     const float sustain = std::clamp (P.envSustain, 0.0f, 1.0f);
     const int subMode = std::clamp (P.bSub, 0, 2);
     const int mode = std::clamp (P.multMode, 0, 2);
-    const float osr = (float) osRate;
-    const float invFactor = 1.0f / (float) factor;
+    const int wantedFactor = factorFor (P.quality);
+    float osr = (float) osRate;
+    float invFactor = 1.0f / (float) factor;
 
     // Patch row: a changed menu or Index route starts a short cross-fade.
     bool used[kNumSources] = {};
@@ -321,6 +335,21 @@ void Engine::process (float* const* out, int numChannels, int numSamples, const 
 
     for (int i = 0; i < numSamples; ++i)
     {
+        // ---- a changed Quality: fade out, switch the oversampling while silent, fade in again
+        if (wantedFactor != factor)
+        {
+            qGain -= qStep;
+            if (qGain <= 0.0f)
+            {
+                qGain = 0.0f;
+                setFactor (wantedFactor);
+                osr = (float) osRate;
+                invFactor = 1.0f / (float) factor;
+            }
+        }
+        else if (qGain < 1.0f)
+            qGain = std::min (1.0f, qGain + qStep);
+
         // ---- controls, once per project-rate sample (every continuous control is smoothed)
         const float bend = sBend.next (bendTarget);
         const int baseA = followA ? playedNote : kFreeNote;
@@ -466,10 +495,10 @@ void Engine::process (float* const* out, int numChannels, int numSamples, const 
             if (j == 0) { scopeA = finalOut[0]; scopeB = finalOut[1]; }
         }
 
-        float y = decim.process (os);
+        float y = decim[decimIdx].process (os);
         if (! std::isfinite (y))                          // should never happen; if it does, start clean rather than howl
         {
-            oscA.reset(); oscB.reset(); decim.reset(); clearFeedback();
+            oscA.reset(); oscB.reset(); decim[decimIdx].reset(); clearFeedback();
             dcX = dcY = 0.0f;
             y = 0.0f;
         }
@@ -478,7 +507,7 @@ void Engine::process (float* const* out, int numChannels, int numSamples, const 
 
         const float amp = sAmp.next (P.ampMode == AmpDrone ? 1.0f : e);
         const float v = sVolume.next (P.volume);
-        const float sample = hp * amp * (v * v * 2.0f);   // Volume: 0 = silent, 0.71 = 0 dB, 1 = +6 dB
+        const float sample = hp * amp * (v * v * 2.0f) * qGain;   // Volume: 0 = silent, 0.71 = 0 dB, 1 = +6 dB
 
         for (int c = 0; c < numChannels; ++c)
             out[c][i] = sample;

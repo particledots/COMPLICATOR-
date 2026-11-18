@@ -1,7 +1,8 @@
 // COMPLICATOR engine: one voice of the complex oscillator. Plain C++17, no plugin code.
 //
 // The plugin wrapper hands it the settings (Params), the notes and pitch bend, and asks for audio.
-// Everything inside runs at 4x the project's sample rate and is brought back down with a steep filter.
+// Everything inside runs at 2x, 4x (default) or 8x the project's sample rate (Params::quality) and is brought back down
+// with a steep filter. Changing the quality while playing fades the sound out and in over a few milliseconds.
 //
 // Signal flow per oversampled sample (milestone 2):
 //   1. Sources: the oscillators' outputs of the previous sample, the envelope, velocity, mod wheel, aftertouch and the
@@ -52,7 +53,9 @@ namespace complicator
         float playedCoarseA() const { return shownCoarseA.load (std::memory_order_relaxed); }
         float playedCoarseB() const { return shownCoarseB.load (std::memory_order_relaxed); }
         int oversamplingFactor() const { return factor; }
-        double latencySamples() const { return decim.latency(); }
+        double latencySamples() const { return decim[decimIdx].latency(); }
+        // 2, 4 or 8 for Params::quality 0, 1, 2 (anything else is read as 4x).
+        static int factorFor (int quality) { return quality == 0 ? 2 : (quality == 2 ? 8 : 4); }
 
         // Scopes. While the panel is open (setScopeActive (true)) the engine records Final A (which = 0) and Final B
         // (which = 1) just before the amp and volume. scopeCopy runs on the panel's thread: it copies the newest 'n'
@@ -94,10 +97,12 @@ namespace complicator
         float sourceValue (int code) const;
         float readInput (int k);
         void clearFeedback();
+        void setFactor (int f);
 
         Params params;
         double sr = 48000.0, osRate = 192000.0;
-        int factor = 4;
+        int factor = 4, decimIdx = 1;
+        float qGain = 1.0f, qStep = 0.01f;                 // fade out / in around a change of quality
         int noteStack[128] = {};
         int stackSize = 0;
         int playedNote = 48;
@@ -106,7 +111,7 @@ namespace complicator
 
         OscA oscA;
         OscB oscB;
-        Decimator decim;
+        Decimator decim[3];                                // for 2x, 4x and 8x (all ready, so a change allocates nothing)
         Envelope env;
         float envLast = 0.0f;
         float dcX = 0.0f, dcY = 0.0f, dcCoef = 0.9995f;

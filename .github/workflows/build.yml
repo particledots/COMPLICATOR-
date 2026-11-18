@@ -32,6 +32,29 @@ jobs:
           fi
           echo "::notice::ENGINE-TEST: $(grep -h 'engine tests:' engine-test.log | head -n 1)"
 
+  plugin-check:
+    name: Plugin-layer check (no host)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and run ComplicatorCheck
+        run: |
+          set +e
+          ( sudo apt-get update \
+            && sudo apt-get install -y libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxext-dev \
+                 libfreetype-dev libfontconfig1-dev libgl1-mesa-dev \
+            && cmake -S . -B build-check -DCOMPLICATOR_BUILD_PLUGIN=OFF -DCOMPLICATOR_BUILD_CHECK=ON -DCMAKE_BUILD_TYPE=Release \
+            && cmake --build build-check --target ComplicatorCheck -j 4 \
+            && find build-check -type f -name ComplicatorCheck -perm -u+x | head -n 1 | xargs -I{} {} ) > plugin-check.log 2>&1
+          code=$?
+          tail -n 30 plugin-check.log
+          if [ $code -ne 0 ]; then
+            echo "::error::PLUGIN-CHECK: failed (exit code $code)"
+            grep -E "error|FAIL|plugin checks:" plugin-check.log | head -15 | while IFS= read -r line; do echo "::error::PLUGIN-CHECK: $line"; done
+            exit 1
+          fi
+          echo "::notice::PLUGIN-CHECK: $(grep -h 'plugin checks:' plugin-check.log | head -n 1)"
+
   build-macos:
     name: Build AU + VST3 (macOS)
     runs-on: macos-26     # Apple silicon runner; macos-14 is retired by GitHub on 2 Nov 2026

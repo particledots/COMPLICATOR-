@@ -9,6 +9,13 @@ namespace
     constexpr double kTwoPi = 6.283185307179586476925;
     constexpr double kHalfPi = 1.570796326794896619231;
 
+    // Soft sync (Osc B): when a sync event turns Osc B round early, it also moves this fraction of the way to the peak it
+    // was heading for. Without it, a B tuned near a fifth, a fourth or any other ratio settles into a pattern that repeats
+    // only every second time (a sub-harmonic one octave lower), because the turn-round alone neither gains nor loses
+    // distance to the peak. With it, every sync event shrinks that distance, so B settles within a few hundred
+    // milliseconds into the pattern the interval really has. Once locked the jump is tiny.
+    constexpr double kSoftSyncPull = 0.5;
+
     inline double wrap01 (double v) { v -= std::floor (v); return v >= 1.0 ? 0.0 : v; }
     inline float sawOf (double p) { return (float) (2.0 * p - 1.0); }
     inline float triOf (double p) { return (float) (p < 0.5 ? -1.0 + 4.0 * p : 3.0 - 4.0 * p); }
@@ -153,11 +160,12 @@ void OscB::linearPiece (double xa, double xb, float ta, float tb, float w)
     }
 }
 
-void OscB::turnRound (double speed, float d, int subMode, float& edge)
+// xPrev: where the triangle was just before the event (differs from x only after a soft-sync jump).
+void OscB::turnRound (double speed, float d, int subMode, float& edge, double xPrev)
 {
     const double v = dir * speed;                                   // slope before the turn
     bTri.ramp ((float) (-2.0 * v), d);
-    bSine.ramp ((float) (std::cos (kHalfPi * x) * kHalfPi * -2.0 * v), d);
+    bSine.ramp ((float) (-v * kHalfPi * (std::cos (kHalfPi * xPrev) + std::cos (kHalfPi * x))), d);
 
     dir = -dir;
     if (subMode == 0) bSquare.step (2.0f * (float) dir, d);
@@ -189,7 +197,7 @@ void OscB::move (double speed, float t0, float t1, float w, int subMode, float& 
             const float tc = t + (float) ((1.0 - x) / v);
             linearPiece (x, 1.0, t, tc, w);
             x = 1.0;
-            turnRound (speed, clampD (1.0f - tc), subMode, edge);
+            turnRound (speed, clampD (1.0f - tc), subMode, edge, x);
             t = tc;
         }
         else if (xe < -1.0 && v < 0.0)
@@ -197,7 +205,7 @@ void OscB::move (double speed, float t0, float t1, float w, int subMode, float& 
             const float tc = t + (float) ((-1.0 - x) / v);
             linearPiece (x, -1.0, t, tc, w);
             x = -1.0;
-            turnRound (speed, clampD (1.0f - tc), subMode, edge);
+            turnRound (speed, clampD (1.0f - tc), subMode, edge, x);
             t = tc;
         }
         else
@@ -220,13 +228,22 @@ void OscB::process (double speed, float w, int subMode, float reverseAt, OscBOut
     }
     else
     {
-        // Soft sync: when Osc A's ramp restarts, Osc B turns round early, but only if it is on its way up and already
-        // in the upper half. An Osc B tuned a little flat of Osc A (or of a whole multiple of it) is pulled into step
-        // and stops beating; anything else is only nudged.
+        // Soft sync: when Osc A's ramp restarts, Osc B turns round early, but only while it is moving away from the
+        // middle (rising in the upper half or falling in the lower half), and it is pulled part of the way to that peak
+        // (see kSoftSyncPull). An Osc B tuned a little flat of Osc A (or of a whole multiple, or of a simple ratio such
+        // as a fifth) is pulled into step and stops beating; anything else is only nudged.
         const float d = clampD (reverseAt);
         move (speed, 0.0f, 1.0f - d, w, subMode, edge);
         if (dir * speed > 0.0 && dir * x > 0.0)
-            turnRound (speed, d, subMode, edge);
+        {
+            const double xPrev = x;
+            const double xNew = x + ((double) dir - x) * kSoftSyncPull;    // part of the way to the coming peak
+            bTri.step ((float) (xNew - x), d);
+            bSine.step ((float) (std::sin (kHalfPi * xNew) - std::sin (kHalfPi * x)), d);
+            linearPiece (x, xNew, 1.0f - d, 1.0f - d, w);                    // staircase steps the jump passes
+            x = xNew;
+            turnRound (speed, d, subMode, edge, xPrev);
+        }
         move (speed, 1.0f - d, 1.0f, w, subMode, edge);
     }
 

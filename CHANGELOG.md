@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.0 — milestone 3 (waiting for the Logic test)
+
+- **Factory presets** (9) and an **Init** entry in the now-live Preset menu; also offered as AU / VST3 programs. Presets
+  set their own Final levels and Volume (level matched, about -19 dB RMS) and never touch Pitch Snap, Scale, Key or
+  Quality. The choice is saved with the project; older projects show "Custom".
+- **Quality menu** live (2x / 4x / 8x, 4x default, 8x marked heavy). All three decimators are prepared up front; a change
+  fades out over 4 ms, switches while silent and fades in. Latency stays about 19 samples. No parameter id, order, range
+  or menu list changed (65 parameters, all version 1).
+- **Soft sync**: Osc B is pulled half way to the peak at each turn, so a fifth, fourth, third and sixth lock into their
+  natural pattern. Sound with soft sync off is bit-identical to 0.2.0 at 4x.
+- The "M3" tag on the panel is gone (nothing is dimmed). No other panel change.
+- New `ComplicatorCheck` console program and a "Plugin-layer check" job in the Actions run: golden control list,
+  restoring 0.1.0 / 0.2.0 saved states, presets, menus, panel snapshots.
+- Engine self-test extended (891 checks): quality, aliasing per quality, quality changes while playing, soft sync at
+  simple ratios, every preset (finite, bounded, level matched, pitch), CPU per quality.
+
 ## 0.2.0 — milestone 2 (built and tested in Logic 2026-11-17)
 
 - **Wavefolders** on both oscillators with Symmetry, Wavefold CV amount and the Final outputs. Fader: left = near

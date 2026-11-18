@@ -38,13 +38,23 @@ ComplicatorPanel::ComplicatorPanel (ComplicatorAudioProcessor& p) : proc (p)
     auto& st = proc.getValueTreeState();
     using namespace CxParams;
 
-    // Header (M3)
-    presetMenu.addItem ("Preset: Init", 1);
-    presetMenu.setSelectedId (1, juce::dontSendNotification);
+    // Header: the Preset menu (Init + the factory presets) and the Quality menu
+    presetMenu.setName ("Preset");
+    for (int i = 0; i < proc.getNumPrograms(); ++i)
+        presetMenu.addItem (proc.getProgramName (i), i + 1);
     presetMenu.setBounds (424, 11, 150, 22);
     addAndMakeVisible (presetMenu);
-    dimIt (presetMenu);
-    menu (quality, "Quality", { 582, 11, 86, 22 }, true);
+    presetMenu.onChange = [this]
+    {
+        const int id = presetMenu.getSelectedId();
+        if (id > 0)
+            proc.setCurrentProgram (id - 1);
+    };
+    updatePresetMenu();
+    qualityMenu = &menu (quality, "Quality", { 582, 11, 86, 22 });
+    qualityMenu->changeItemText (3, "8x heavy");                      // the list's third entry (8x) is the CPU-hungry one
+    qualityParam = st.getRawParameterValue (quality);
+    updateQualityMenu();
 
     // The two oscillators
     for (int o = 0; o < 2; ++o)
@@ -118,6 +128,28 @@ ComplicatorPanel::~ComplicatorPanel()
     proc.setScopeActive (false);
     stopTimer();
     setLookAndFeel (nullptr);
+}
+
+void ComplicatorPanel::updatePresetMenu()
+{
+    const int shown = proc.shownPreset();
+    if (shown >= 0)
+        presetMenu.setSelectedId (shown + 1, juce::dontSendNotification);
+    else
+    {
+        presetMenu.setSelectedId (0, juce::dontSendNotification);
+        presetMenu.setText ("Custom", juce::dontSendNotification);   // settings from a project saved before presets
+    }
+    shownPresetId = shown;
+}
+
+// 8x runs the whole engine at 8 times the project's sample rate: it is marked in the list and its label turns amber.
+void ComplicatorPanel::updateQualityMenu()
+{
+    const int q = qualityParam != nullptr ? juce::roundToInt (qualityParam->load()) : 1;
+    qualityMenu->setColour (juce::ComboBox::textColourId, q == 2 ? tagText() : text());
+    qualityMenu->repaint();
+    shownQuality = q;
 }
 
 void ComplicatorPanel::dimIt (juce::Component& c)
@@ -217,6 +249,8 @@ void ComplicatorPanel::updateScope (int which)
 
 void ComplicatorPanel::timerCallback()
 {
+    if (proc.shownPreset() != shownPresetId) updatePresetMenu();
+    if (qualityParam != nullptr && juce::roundToInt (qualityParam->load()) != shownQuality) updateQualityMenu();
     const float a = proc.getEngine().playedCoarseA();
     const float b = proc.getEngine().playedCoarseB();
     if (std::fabs (a - shownA) > 0.004f) { shownA = a; repaint (kOscX[0] + 4, 150, 80, 18); }
@@ -237,7 +271,6 @@ void ComplicatorPanel::paint (juce::Graphics& g)
     // Header
     textAt (g, "COMPLICATOR", 16, 27, text(), 18.0f, juce::Justification::centredLeft);
     textAt (g, "particledots", 156, 27, muted(), 11.0f, juce::Justification::centredLeft);
-    tag (g, 392, 27, "M3");
     g.setColour (line());
     g.drawLine (8.0f, 42.0f, 672.0f, 42.0f, 1.0f);
 

@@ -6,7 +6,8 @@
 // Osc B is a "triangle core": a value that runs up to +1, turns round, runs down to -1, turns round. Its square wave
 // is the direction of travel, its sine is the triangle bent into a sine shape, and its "PWM" output is a staircase
 // triangle whose top and bottom steps get wider with the PWM knob. Soft sync makes it turn round early
-// (only while it is rising through the upper half, so it locks rather than scrambles).
+// (only while it is moving away from the middle, so it locks rather than scrambles) and pulls it part of the way to
+// the peak it was heading for.
 //
 // Both run at the oversampled rate and smooth every jump and corner (see Blep.h).
 
@@ -55,7 +56,7 @@ namespace complicator
     private:
         void move (double speed, float t0, float t1, float stepWidth, int subMode, float& edge);
         void linearPiece (double xa, double xb, float ta, float tb, float stepWidth);
-        void turnRound (double speed, float d, int subMode, float& edge);
+        void turnRound (double speed, float d, int subMode, float& edge, double xPrev);
 
         double x = 0.0;
         int dir = 1;          // +1 rising, -1 falling; this is also the square wave
