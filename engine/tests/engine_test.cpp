@@ -1431,7 +1431,7 @@ static double fundamentalHz (const std::vector<float>& v, double rate, double lo
 
 static void testPresets()
 {
-    CHECK (presets::kNumFactory == 9, "factory preset count");
+    CHECK (presets::kNumFactory == 31 && presets::kNumManual == 9, "factory preset count");
     // distinct names, distinct sounds
     for (int i = 0; i < presets::kNumFactory; ++i)
     {
@@ -1454,7 +1454,13 @@ static void testPresets()
     for (int i = 0; i < presets::kNumFactory; ++i)
     {
         const Params p = presets::factory (i);
-        const bool sidechainPreset = p.patch[InSymA] == SrcSidechain;
+        bool sidechainPreset = false;                      // reads the Side Chain somewhere
+        for (int k = 0; k < kNumInputs; ++k) sidechainPreset = sidechainPreset || p.patch[k] == SrcSidechain;
+        const bool needsSidechain = i == 8 || i == 30;     // the two that are silent without it (folder / ring modulator for outside audio)
+        // Struck and plucked sounds (the envelope sustains at nothing) have no steady part: their level is measured over the
+        // first half second of the note instead of after 0.6 s.
+        const bool struck = p.ampMode == AmpEnv && p.envSustain < 0.05f;
+        const double lvSkip = struck ? 0.0 : 0.6, lvLen = struck ? 0.5 : 1.2;
 
         // every setting inside its range
         for (const OscParams* o : { &p.a, &p.b })
@@ -1481,7 +1487,7 @@ static void testPresets()
                     sc.resize ((size_t) (2.2 * rate));
                     for (size_t k = 0; k < sc.size(); ++k) sc[k] = 0.3f * (float) std::sin (2.0 * 3.14159265358979 * 1000.0 * (double) k / rate);
                 }
-                auto v = renderAt (p, rate, note, 1.2, 0.6, sidechainPreset ? &sc : nullptr);
+                auto v = renderAt (p, rate, note, lvLen, lvSkip, sidechainPreset ? &sc : nullptr);
                 bool finite = true;
                 for (float x : v) finite = finite && std::isfinite (x);
                 const double level = rms (v), pk = peak (v);
@@ -1489,12 +1495,13 @@ static void testPresets()
                 CHECK (finite, "preset %d (%s) at %.0f Hz, note %d: not finite", i, presets::name (i), rate, note);
                 CHECK (pk < 1.0, "preset %d (%s) at %.0f Hz, note %d: peak %.2f", i, presets::name (i), rate, note, pk);
                 CHECK (level > 0.01, "preset %d (%s) at %.0f Hz, note %d: silent (rms %.4f)", i, presets::name (i), rate, note, level);
+                CHECK (std::isfinite (level), "preset %d (%s) at %.0f Hz, note %d: level not finite", i, presets::name (i), rate, note);
                 CHECK (dB > 1.0 && dB < 9.0, "preset %d (%s) at %.0f Hz, note %d: %.1f dB against the Init patch (expected about +4)", i, presets::name (i), rate, note, dB);
                 if (rate == kSr && note == 60) std::printf ("preset %-26s rms %.1f dB (Init %.1f dB), peak %.2f\n", presets::name (i), 20.0 * std::log10 (level), 20.0 * std::log10 (initLevel), pk);
             }
 
-        // The sidechain preset is silent without a sidechain signal (it is a wavefolder for outside audio).
-        if (sidechainPreset)
+        // The presets for outside audio are silent without a sidechain signal.
+        if (needsSidechain)
             CHECK (rms (renderAt (p, kSr, 60, 1.0, 0.6)) < 1.0e-3, "preset %d without a sidechain signal is silent", i);
 
         // Same settings, same sound.
@@ -1507,8 +1514,8 @@ static void testPresets()
             Params pq = p; pq.quality = q;
             std::vector<float> sc;
             if (sidechainPreset) { sc.assign ((size_t) (1.8 * kSr), 0.0f); for (size_t k = 0; k < sc.size(); ++k) sc[k] = 0.3f * (float) std::sin (2.0 * 3.14159265358979 * 1000.0 * (double) k / kSr); }
-            auto v = renderAt (pq, kSr, 60, 1.0, 0.6, sidechainPreset ? &sc : nullptr);
-            auto v4 = renderAt (p, kSr, 60, 1.0, 0.6, sidechainPreset ? &sc : nullptr);
+            auto v = renderAt (pq, kSr, 60, lvLen, lvSkip, sidechainPreset ? &sc : nullptr);
+            auto v4 = renderAt (p, kSr, 60, lvLen, lvSkip, sidechainPreset ? &sc : nullptr);
             CHECK (std::fabs (20.0 * std::log10 (rms (v) / rms (v4))) < 1.5, "preset %d at quality %d: %.2f dB from 4x", i, q, 20.0 * std::log10 (rms (v) / rms (v4)));
         }
     }
@@ -1551,6 +1558,253 @@ static void testPresets()
         std::printf ("Wavefolder preset: share of the 200 Hz sine in the output: quiet input %.3f, loud input %.3f\n", qs, ls);
         CHECK (qs > 0.9, "quiet input should pass nearly unchanged (%.3f)", qs);
         CHECK (ls < 0.8, "loud input should be folded (%.3f)", ls);
+    }
+}
+
+// ---- The presets that are my own inventions (index kNumManual and up): each one does what its comment says.
+
+static int presetIndex (const char* n)
+{
+    for (int i = 0; i < presets::kNumFactory; ++i)
+        if (std::string (presets::name (i)) == n) return i;
+    CHECK (false, "no preset called %s", n);
+    return 0;
+}
+
+// Like renderAt, but with the velocity, mod wheel and aftertouch of the note.
+static std::vector<float> renderCtl (Params p, int note, float vel, float wheel, float touch, double seconds, double skip,
+                                     const std::vector<float>* sidechain = nullptr)
+{
+    Engine e;
+    e.setParams (p);
+    e.prepare (kSr, kBlock);
+    e.noteOn (note, vel);
+    e.modWheel (wheel);
+    e.aftertouch (touch);
+    const size_t total = (size_t) ((seconds + skip) * kSr);
+    std::vector<float> out (total);
+    for (size_t pos = 0; pos < total; pos += kBlock)
+    {
+        const int n = (int) std::min<size_t> (kBlock, total - pos);
+        float* ch[1] = { out.data() + pos };
+        e.setParams (p);
+        e.process (ch, 1, n, sidechain != nullptr ? sidechain->data() + pos : nullptr);
+    }
+    return std::vector<float> (out.begin() + (long) (skip * kSr), out.end());
+}
+
+// Magnitude spectrum of 4096 samples from 'start' (Hann window), 20 Hz .. 20 kHz.
+static std::vector<double> magnitudes (const std::vector<float>& v, size_t start)
+{
+    const size_t n = 4096;
+    std::vector<std::complex<double>> a (n);
+    for (size_t i = 0; i < n; ++i)
+    {
+        const double w = 0.5 - 0.5 * std::cos (2.0 * 3.14159265358979323846 * (double) i / (double) n);
+        a[i] = (start + i < v.size() ? (double) v[start + i] : 0.0) * w;
+    }
+    fft (a);
+    std::vector<double> m (n / 2);
+    for (size_t k = 0; k < n / 2; ++k)
+    {
+        const double f = (double) k * kSr / (double) n;
+        m[k] = (f < 20.0 || f > 20000.0) ? 0.0 : std::abs (a[k]);
+    }
+    return m;
+}
+
+// The "brightness" of a stretch of sound: the average frequency of its spectrum, weighted by magnitude.
+static double centroidHz (const std::vector<float>& v, double startSeconds)
+{
+    const auto m = magnitudes (v, (size_t) (startSeconds * kSr));
+    double num = 0.0, den = 0.0;
+    for (size_t k = 0; k < m.size(); ++k) { num += (double) k * kSr / 4096.0 * m[k]; den += m[k]; }
+    return den > 0.0 ? num / den : 0.0;
+}
+
+static double dominantHz (const std::vector<float>& v, double startSeconds)
+{
+    const auto m = magnitudes (v, (size_t) (startSeconds * kSr));
+    size_t best = 0;
+    for (size_t k = 1; k < m.size(); ++k) if (m[k] > m[best]) best = k;
+    return (double) best * kSr / 4096.0;
+}
+
+// Size of one frequency in the signal (a single-bin DFT with a Hann window).
+static double toneAmp (const std::vector<float>& v, double f)
+{
+    std::complex<double> s (0.0);
+    const size_t n = v.size();
+    for (size_t i = 0; i < n; ++i)
+    {
+        const double w = 0.5 - 0.5 * std::cos (2.0 * 3.14159265358979323846 * (double) i / (double) n);
+        const double ang = -2.0 * 3.14159265358979323846 * f * (double) i / kSr;
+        s += (double) v[i] * w * std::complex<double> (std::cos (ang), std::sin (ang));
+    }
+    return std::abs (s) / (double) n;
+}
+
+// The lowest and highest frequency of a pitched sound, from the length of each cycle (rising zero crossings).
+static void cycleRange (const std::vector<float>& v, double& lo, double& hi)
+{
+    lo = 1.0e9; hi = 0.0;
+    long last = -1;
+    for (size_t i = 1; i < v.size(); ++i)
+        if (v[i - 1] < 0.0f && v[i] >= 0.0f)
+        {
+            if (last >= 0) { const double f = kSr / (double) ((long) i - last); lo = std::min (lo, f); hi = std::max (hi, f); }
+            last = (long) i;
+        }
+}
+
+static double dB (double ratio) { return 20.0 * std::log10 (std::max (ratio, 1.0e-12)); }
+
+static void testOwnPresets()
+{
+    // The order of the entries is saved in projects: it must never change.
+    CHECK (std::string (presets::name (presets::kNumManual)) == "Glass Bell", "the first of my own presets");
+    CHECK (std::string (presets::name (presets::kNumFactory - 1)) == "Ring Voice (sidechain in)", "the last preset");
+
+    {   // Glass Bell: bright inharmonic strike that relaxes toward a pure tone.
+        const Params p = presets::factory (presetIndex ("Glass Bell"));
+        auto v = renderCtl (p, 72, 1.0f, 0, 0, 1.2, 0.0);
+        const double early = centroidHz (v, 0.01), late = centroidHz (v, 0.7);
+        std::printf ("Glass Bell: centroid %.0f Hz at the strike, %.0f Hz later\n", early, late);
+        CHECK (early > 1.4 * late, "Glass Bell should mellow: %.0f -> %.0f Hz", early, late);
+    }
+    {   // Tine Piano: harder notes are brighter.
+        const Params p = presets::factory (presetIndex ("Tine Piano"));
+        const double soft = centroidHz (renderCtl (p, 60, 0.3f, 0, 0, 0.3, 0.0), 0.02), hard = centroidHz (renderCtl (p, 60, 1.0f, 0, 0, 0.3, 0.0), 0.02);
+        std::printf ("Tine Piano: centroid %.0f Hz soft, %.0f Hz hard\n", soft, hard);
+        CHECK (hard > 1.3 * soft, "Tine Piano velocity: %.0f vs %.0f Hz", soft, hard);
+    }
+    {   // Metal Gong: it keeps ringing for seconds while the note is held.
+        const Params p = presets::factory (presetIndex ("Metal Gong"));
+        auto v = renderCtl (p, 48, 1.0f, 0, 0, 2.5, 0.0);
+        const double a = rms (std::vector<float> (v.begin() + 2400, v.begin() + 7200)), b = rms (std::vector<float> (v.begin() + 48000, v.begin() + 52800));
+        std::printf ("Gong: %.1f dB at the strike, %.1f dB after one second\n", dB (a), dB (b));
+        CHECK (b > 0.15 * a, "Gong should ring on (%.4f vs %.4f)", a, b);
+    }
+    {   // Fold Pluck and Acid Fold: the envelope closes the folder, so the sound goes from bright to a plain tone.
+        for (const char* n : { "Fold Pluck", "Acid Fold" })
+        {
+            const Params p = presets::factory (presetIndex (n));
+            auto v = renderCtl (p, n[0] == 'F' ? 60 : 36, 1.0f, 0, 0, 0.6, 0.0);
+            const double early = centroidHz (v, 0.0), late = centroidHz (v, 0.3);
+            std::printf ("%s: centroid %.0f Hz at the start, %.0f Hz later\n", n, early, late);
+            CHECK (early > 2.0 * late, "%s should darken: %.0f -> %.0f Hz", n, early, late);
+        }
+    }
+    {   // Velocity Brass: hard notes are far brighter and louder than soft ones.
+        const Params p = presets::factory (presetIndex ("Velocity Brass"));
+        auto soft = renderCtl (p, 55, 0.3f, 0, 0, 1.0, 0.0), hard = renderCtl (p, 55, 1.0f, 0, 0, 1.0, 0.0);
+        const double cs = centroidHz (soft, 0.5), ch = centroidHz (hard, 0.5);
+        const double ls = dB (rms (std::vector<float> (soft.begin() + 24000, soft.end()))), lh = dB (rms (std::vector<float> (hard.begin() + 24000, hard.end())));
+        std::printf ("Velocity Brass: centroid %.0f / %.0f Hz, level %.1f / %.1f dB (soft / hard)\n", cs, ch, ls, lh);
+        CHECK (ch > 3.0 * cs && ls < lh + 3.0, "Velocity Brass dynamics: soft notes dull, and not louder than hard ones");
+    }
+    {   // Wheel Folder: wheel up is far brighter, at about the same level.
+        const Params p = presets::factory (presetIndex ("Wheel Folder"));
+        auto lo = renderCtl (p, 58, 1.0f, 0.0f, 0, 1.0, 0.0), hi = renderCtl (p, 58, 1.0f, 1.0f, 0, 1.0, 0.0);
+        const double cl = centroidHz (lo, 0.6), chh = centroidHz (hi, 0.6);
+        const double dl = std::fabs (dB (rms (std::vector<float> (lo.begin() + 28800, lo.end())) / rms (std::vector<float> (hi.begin() + 28800, hi.end()))));
+        std::printf ("Wheel Folder: centroid %.0f Hz (wheel 0), %.0f Hz (wheel 1), level difference %.1f dB\n", cl, chh, dl);
+        CHECK (chh > 4.0 * cl && dl < 3.0, "Wheel Folder morph");
+    }
+    {   // Pressure Vibrato: no pressure = steady pitch; full pressure = a clear vibrato (about +/- half a semitone).
+        const Params p = presets::factory (presetIndex ("Pressure Vibrato"));
+        double lo0, hi0, lo1, hi1;
+        cycleRange (renderCtl (p, 67, 1.0f, 0, 0.0f, 1.2, 0.8), lo0, hi0);
+        cycleRange (renderCtl (p, 67, 1.0f, 0, 1.0f, 1.2, 0.8), lo1, hi1);
+        std::printf ("Pressure Vibrato: pitch spread %.2f %% without pressure, %.2f %% with\n", 100.0 * (hi0 / lo0 - 1.0), 100.0 * (hi1 / lo1 - 1.0));
+        CHECK (hi0 / lo0 < 1.015 && hi1 / lo1 > 1.04, "Pressure Vibrato depth");
+    }
+    {   // Hollow Flute: the pitch is the note played.
+        const Params p = presets::factory (presetIndex ("Hollow Flute"));
+        const double f = fundamentalHz (renderCtl (p, 72, 1.0f, 0, 0, 1.0, 0.8), kSr, 200.0, 1500.0);
+        CHECK (std::fabs (f / hz (72) - 1.0) < 0.03, "Hollow Flute pitch %.1f Hz instead of %.1f", f, hz (72));
+    }
+    {   // Sync Sweep Lead: the envelope sweeps the sync timbre (brighter at the start of the note).
+        const Params p = presets::factory (presetIndex ("Sync Sweep Lead"));
+        auto v = renderCtl (p, 60, 1.0f, 0, 0, 1.2, 0.0);
+        const double early = centroidHz (v, 0.02), late = centroidHz (v, 0.8);
+        std::printf ("Sync Sweep Lead: centroid %.0f Hz early, %.0f Hz late\n", early, late);
+        CHECK (early > 1.15 * late, "Sync Sweep Lead should sweep: %.0f -> %.0f Hz", early, late);
+    }
+    {   // Soft Sync Fifth: a fifth locks into its 2 : 3 pattern, so the sound repeats once per octave BELOW the note.
+        const Params p = presets::factory (presetIndex ("Soft Sync Fifth"));
+        const double f = fundamentalHz (renderCtl (p, 48, 1.0f, 0, 0, 1.0, 0.8), kSr, 40.0, 400.0);
+        std::printf ("Soft Sync Fifth: repeats at %.1f Hz (note %.1f Hz)\n", f, hz (48));
+        CHECK (std::fabs (f / (hz (48) / 2.0) - 1.0) < 0.03, "Soft Sync Fifth should lock at half the note: %.1f Hz", f);
+    }
+    {   // Stair Pad: the colour moves slowly.
+        const Params p = presets::factory (presetIndex ("Stair Pad"));
+        auto v = renderCtl (p, 55, 1.0f, 0, 0, 3.0, 1.0);
+        double lo = 1.0e9, hi = 0.0, sum = 0.0; int count = 0;
+        for (double t = 0.0; t < 2.8; t += 0.1) { const double c = centroidHz (v, t); lo = std::min (lo, c); hi = std::max (hi, c); sum += c; ++count; }
+        std::printf ("Stair Pad: centroid %.0f .. %.0f Hz over 3 s\n", lo, hi);
+        CHECK ((hi - lo) / (sum / count) > 0.05, "Stair Pad should drift: %.0f .. %.0f Hz", lo, hi);
+    }
+    {   // Open Fifth Drone: sounds without any note (the Amp is Drone).
+        const Params p = presets::factory (presetIndex ("Open Fifth Drone"));
+        Engine e; e.setParams (p); e.prepare (kSr, kBlock);
+        std::vector<float> idle (kBlock * 40);
+        for (int b = 0; b < 40; ++b) { float* ch[1] = { idle.data() + b * kBlock }; e.setParams (p); e.process (ch, 1, kBlock); }
+        CHECK (rms (idle) > 0.02, "Open Fifth Drone should sound without a note (%.4f)", rms (idle));
+    }
+    {   // Deep Sub: the sound repeats at the sub square's pitch, an octave below the note.
+        const Params p = presets::factory (presetIndex ("Deep Sub"));
+        const double f = fundamentalHz (renderCtl (p, 48, 1.0f, 0, 0, 1.0, 0.8), kSr, 20.0, 400.0);
+        CHECK (std::fabs (f / (hz (48) / 2.0) - 1.0) < 0.03, "Deep Sub pitch %.1f Hz instead of %.1f", f, hz (48) / 2.0);
+    }
+    {   // Wobble Bass: the brightness moves by a large factor within a second (the folder is driven by an LFO).
+        const Params p = presets::factory (presetIndex ("Wobble Bass"));
+        auto v = renderCtl (p, 36, 1.0f, 0, 0, 1.2, 0.4);
+        double lo = 1.0e9, hi = 0.0;
+        for (double t = 0.0; t < 1.0; t += 0.04) { const double c = centroidHz (v, t); lo = std::min (lo, c); hi = std::max (hi, c); }
+        std::printf ("Wobble Bass: centroid %.0f .. %.0f Hz\n", lo, hi);
+        CHECK (hi > 1.5 * lo, "Wobble Bass should wobble: %.0f .. %.0f Hz", lo, hi);
+    }
+    {   // Sine Kick: the pitch falls by a large factor in the first quarter second.
+        const Params p = presets::factory (presetIndex ("Sine Kick"));
+        auto v = renderCtl (p, 36, 1.0f, 0, 0, 0.35, 0.0);
+        double lo, hi;
+        cycleRange (std::vector<float> (v.begin() + 480, v.begin() + 3000), lo, hi);
+        const double start = hi;
+        cycleRange (std::vector<float> (v.begin() + 9600, v.begin() + 14400), lo, hi);
+        std::printf ("Sine Kick: %.0f Hz at the start, %.0f Hz at 0.2 s\n", start, lo);
+        CHECK (start > 3.0 * lo, "Sine Kick should fall: %.0f -> %.0f Hz", start, lo);
+    }
+    {   // Laser Zap: the sound sweeps down by a large factor.
+        const Params p = presets::factory (presetIndex ("Laser Zap"));
+        auto v = renderCtl (p, 60, 1.0f, 0, 0, 0.5, 0.0);
+        const double early = dominantHz (v, 0.0), late = dominantHz (v, 0.2);
+        std::printf ("Laser Zap: strongest frequency %.0f Hz at the start, %.0f Hz at 0.2 s\n", early, late);
+        CHECK (early > 3.0 * late, "Laser Zap should sweep down: %.0f -> %.0f Hz", early, late);
+    }
+    {   // Metal Hat: dies away quickly (a short struck sound).
+        const Params p = presets::factory (presetIndex ("Metal Hat"));
+        auto v = renderCtl (p, 60, 1.0f, 0, 0, 0.5, 0.0);
+        const double a = rms (std::vector<float> (v.begin(), v.begin() + 960)), b = rms (std::vector<float> (v.begin() + 14400, v.begin() + 15360));
+        CHECK (a > 30.0 * b, "Metal Hat should die away: %.1f dB", dB (a / b));
+    }
+    {   // Dub Siren: the pitch sweeps over several octaves.
+        const Params p = presets::factory (presetIndex ("Dub Siren"));
+        double lo, hi;
+        cycleRange (renderCtl (p, 69, 1.0f, 0, 0, 1.5, 0.2), lo, hi);
+        std::printf ("Dub Siren: pitch from %.0f Hz to %.0f Hz\n", lo, hi);
+        CHECK (hi > 4.0 * lo, "Dub Siren should sweep: %.0f .. %.0f Hz", lo, hi);
+    }
+    {   // Ring Voice: a 1 kHz sine at the side chain, ring-modulated with Osc B's sine (note 55 = 196 Hz): the output has the
+        // sum and the difference, and neither the input nor the carrier.
+        const Params p = presets::factory (presetIndex ("Ring Voice (sidechain in)"));
+        std::vector<float> sc ((size_t) (2.0 * kSr));
+        for (size_t k = 0; k < sc.size(); ++k) sc[k] = 0.3f * (float) std::sin (2.0 * 3.14159265358979 * 1000.0 * (double) k / kSr);
+        auto v = renderCtl (p, 55, 1.0f, 0, 0, 1.0, 0.5, &sc);
+        const double f = hz (55);
+        const double sum = toneAmp (v, 1000.0 + f), diff = toneAmp (v, 1000.0 - f), in = toneAmp (v, 1000.0), car = toneAmp (v, f);
+        std::printf ("Ring Voice: sum %.4f, difference %.4f, input %.5f, carrier %.5f\n", sum, diff, in, car);
+        CHECK (sum > 10.0 * in && diff > 10.0 * in && sum > 10.0 * car && diff > 10.0 * car, "Ring Voice should ring-modulate");
     }
 }
 
@@ -1613,6 +1867,7 @@ int main()
     testQualityMenu();
     testSoftSyncRatios();
     testPresets();
+    testOwnPresets();
     testCpuM3();
     std::printf ("engine tests: %d checks, %d failed\n", checks, failures);
     return failures == 0 ? 0 : 1;
