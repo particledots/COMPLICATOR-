@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.1 — new panel look (built, not yet tested in Logic)
+## 0.3.1 — new panel look (tested in Logic, Intel Mac, 2026-11-26: works)
 
 - Panel restyled in the "gold sections" look of Anamnesis 0.3.1: gold frames with titles, flow lines, cream knob caps in
   gold range arcs, blue lamps as the only colour, Marcellus title, Space Grotesk labels (fonts built in).

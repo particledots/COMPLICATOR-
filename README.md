@@ -34,7 +34,7 @@ saved projects load as before. The panel is 680 x 708 units and opens at 120% (r
 coding of the oscillators and the amber "8x heavy" colour are gone; the menu still says "8x heavy". The fixed artwork is
 drawn once into a stored picture; 30 times a second only the two scopes and the two Coarse texts are redrawn. The check
 program tests that the title fits at five window sizes (in the drawn pixels), that every text fits and none touches
-another, and that the live update is much lighter than drawing the whole panel. Status: built, not yet tested in Logic.
+another, and that the live update is much lighter than drawing the whole panel. Status: tested in Logic on the Intel Mac (macOS 12.7.8, Logic Pro 10.7.8) on 2026-11-26 and reported "works".
 
 ## What is new in milestone 3
 
