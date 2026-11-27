@@ -28,6 +28,7 @@ target_compile_definitions(ComplicatorCheck PRIVATE
 target_link_libraries(ComplicatorCheck
     PRIVATE
         complicator_engine
+        ComplicatorFonts
         juce::juce_audio_processors
         juce::juce_gui_basics
     PUBLIC

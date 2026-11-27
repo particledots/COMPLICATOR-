@@ -20,6 +20,22 @@ Test notes: the Logic CPU meter shows no numbers on the Intel Mac, so its load i
 (see "CPU and the Quality menu"). The Final A / Final B mixer levels start at 0, so the folders are silent until a
 Final level is raised; every factory preset sets the Final levels it needs.
 
+## The panel (0.3.1)
+
+The panel is in the "gold sections" look of Anamnesis 0.3.1: black, gold hairline frames grouping the controls, cream knob
+caps inside gold range arcs, and blue lamps as the only colour (they mean "on" or "chosen"). Sections: **Preset / Quality**,
+**Osc A** and **Osc B** (tuning, FM, Final scope, wavefold), **Pitch and Sync**, **Multiply**, **Index** (Index, CV amount
+and the routes), **Patch**, and **Output mix** (the eleven levels, Envelope, Amp, Volume). Gold flow lines show how the
+sound moves: Wavefold, Fold CV and Symmetry run into each Final scope; Osc A (modulator) and Osc B (carrier) run into
+Multiply; CV amount adds to Index, which feeds the routes; the eleven mix levels run into Amp and then Volume.
+
+Only the look changed: every control, id, order, range, menu list and the plugin and manufacturer codes are the same, and
+saved projects load as before. The panel is 680 x 708 units and opens at 120% (resizable from 90% to 180%). The colour
+coding of the oscillators and the amber "8x heavy" colour are gone; the menu still says "8x heavy". The fixed artwork is
+drawn once into a stored picture; 30 times a second only the two scopes and the two Coarse texts are redrawn. The check
+program tests that the title fits at five window sizes (in the drawn pixels), that every text fits and none touches
+another, and that the live update is much lighter than drawing the whole panel. Status: built, not yet tested in Logic.
+
 ## What is new in milestone 3
 
 - **Factory presets**: the Preset menu is live. "Init" resets every control except Pitch Snap, Scale, Key and Quality.

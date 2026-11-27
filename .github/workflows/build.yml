@@ -55,6 +55,20 @@ jobs:
             exit 1
           fi
           echo "::notice::PLUGIN-CHECK: $(grep -h 'plugin checks:' plugin-check.log | head -n 1)"
+          grep -hE "^(title|drawing|panel texts)" plugin-check.log | while IFS= read -r line; do echo "::notice::PLUGIN-CHECK: $line"; done
+
+      - name: Pictures of the panel
+        run: |
+          BIN=$(find build-check -type f -name ComplicatorCheck -perm -u+x | head -n 1)
+          "$BIN" --snapshot panel-pictures
+          ls -l panel-pictures
+
+      - name: Upload the panel pictures
+        uses: actions/upload-artifact@v4
+        with:
+          name: panel-pictures
+          path: panel-pictures
+          if-no-files-found: error
 
   build-macos:
     name: Build AU + VST3 (macOS)

@@ -478,13 +478,167 @@ static void testCpu()
     }
 }
 
+// ------------------------------------------------------------------------------------------------ 5b. the new panel look
+
+static void collect (juce::Component& c, std::vector<juce::Component*>& out)
+{
+    out.push_back (&c);
+    for (auto* child : c.getChildren()) collect (*child, out);
+}
+
+static void testPanelLook()
+{
+    using namespace CxStyle;
+    // The title fits its area, measured with the panel's own font
+    const float w = titleWidth();
+    CHECK (w > 60.0f && w <= titleRight - titleLeft, "title width %.1f fits the title area (%.0f)", w, titleRight - titleLeft);
+    std::printf ("title \"COMPLICATOR\": %.1f of %.0f panel units\n", w, titleRight - titleLeft);
+
+    // At five window sizes: the title in the drawn pixels, and the shape of the window
+    for (const float s : { 0.9f, 1.0f, 1.2f, 1.5f, 1.8f })
+    {
+        ComplicatorAudioProcessor proc;
+        std::unique_ptr<juce::AudioProcessorEditor> ed (proc.createEditor());
+        ed->setSize (juce::roundToInt (panelW * s), juce::roundToInt (panelH * s));
+        const auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f);
+        CHECK (img.isValid() && img.getWidth() == ed->getWidth(), "size %.0f%%: the panel draws (%d x %d)", s * 100.0f, ed->getWidth(), ed->getHeight());
+        int spill = 0, inside = 0;
+        for (int y = (int) (10 * s); y < (int) (40 * s); ++y)
+        {
+            for (int x = (int) std::ceil (titleLeft * s); x < (int) (titleRight * s); ++x)
+                if (img.getPixelAt (x, y).getBrightness() > 0.6f) ++inside;
+            for (int x = (int) std::ceil ((ornamentLeftEnd + 1.5f) * s); x < (int) ((titleLeft - 0.5f) * s); ++x)
+                if (img.getPixelAt (x, y).getBrightness() > 0.6f) ++spill;
+            for (int x = (int) std::ceil ((titleRight + 0.5f) * s); x < (int) ((ornamentRightStart - 1.5f) * s); ++x)
+                if (img.getPixelAt (x, y).getBrightness() > 0.6f) ++spill;
+        }
+        CHECK (inside > 60 && spill == 0, "size %.0f%%: title drawn inside its area (%d lit pixels inside, %d outside)", s * 100.0f, inside, spill);
+    }
+
+    // Every text of the fixed artwork stays on the panel and none touches another
+    {
+        const auto boxes = ComplicatorPanel::fixedTextBoxes();
+        int outside = 0, touching = 0;
+        for (size_t i = 0; i < boxes.size(); ++i)
+        {
+            if (boxes[i].getX() < 4.0f || boxes[i].getRight() > (float) panelW - 4.0f || boxes[i].getY() < 0.0f || boxes[i].getBottom() > (float) panelH) ++outside;
+            for (size_t j = i + 1; j < boxes.size(); ++j)
+                if (boxes[i].reduced (0.3f).intersects (boxes[j].reduced (0.3f)))
+                {
+                    if (++touching < 6) std::printf ("  texts touch: (%.0f,%.0f,%.0f,%.0f) and (%.0f,%.0f,%.0f,%.0f)\n",
+                        boxes[i].getX(), boxes[i].getY(), boxes[i].getWidth(), boxes[i].getHeight(),
+                        boxes[j].getX(), boxes[j].getY(), boxes[j].getWidth(), boxes[j].getHeight());
+                }
+        }
+        CHECK (outside == 0 && touching == 0, "%d fixed texts: %d off the panel, %d pairs touching", (int) boxes.size(), outside, touching);
+    }
+
+    // Menus, switches and controls
+    ComplicatorAudioProcessor proc;
+    std::unique_ptr<juce::AudioProcessorEditor> edBase (proc.createEditor());
+    auto* ed = dynamic_cast<ComplicatorAudioProcessorEditor*> (edBase.get());
+    if (ed == nullptr) { CHECK (false, "the panel opens"); return; }
+    CHECK (ed->getPanel().getBackdrop().getCachedComponentImage() != nullptr, "the panel's fixed artwork is stored as a picture");
+    std::vector<juce::Component*> all;
+    collect (ed->getPanel(), all);
+    int menus = 0, tooWide = 0, switches = 0, notFit = 0, outside = 0, overlapping = 0;
+    float widest = 0.0f, room = 0.0f;
+    std::vector<juce::Component*> controls;
+    for (auto* c : all)
+    {
+        if (c == &ed->getPanel() || c == &ed->getPanel().getBackdrop()) continue;
+        if (c->getParentComponent() != &ed->getPanel()) continue;                 // (a menu's own label)
+        controls.push_back (c);
+        if (c->getX() < 0 || c->getY() < 0 || c->getRight() > panelW || c->getBottom() > panelH) ++outside;
+        if (auto* cb = dynamic_cast<juce::ComboBox*> (c))
+        {
+            ++menus;
+            const float r = CxLookAndFeel::menuTextRoom (*cb);
+            for (int i = 0; i < cb->getNumItems(); ++i)
+            {
+                const float t = widthOf (cb->getItemText (i), menuFont());
+                if (t > widest) { widest = t; room = r; }
+                if (t > r) { if (++tooWide < 4) std::printf ("  menu text too wide: %s (%.1f of %.1f)\n", cb->getItemText (i).toRawUTF8(), t, r); }
+            }
+        }
+        if (auto* sg = dynamic_cast<CxSegments*> (c))
+        {
+            ++switches;
+            if (! sg->labelsFit()) { if (++notFit < 4) std::printf ("  switch labels do not fit: %s\n", sg->getLabels().joinIntoString (",").toRawUTF8()); }
+        }
+    }
+    for (size_t i = 0; i < controls.size(); ++i)
+        for (size_t j = i + 1; j < controls.size(); ++j)
+            if (controls[i]->getBounds().intersects (controls[j]->getBounds()))
+                if (++overlapping < 4) std::printf ("  controls overlap: (%d,%d,%d,%d) and (%d,%d,%d,%d)\n",
+                    controls[i]->getX(), controls[i]->getY(), controls[i]->getWidth(), controls[i]->getHeight(),
+                    controls[j]->getX(), controls[j]->getY(), controls[j]->getWidth(), controls[j]->getHeight());
+    CHECK (tooWide == 0, "%d menus: every entry fits (widest %.1f of %.1f)", menus, widest, room);
+    CHECK (notFit == 0, "%d switches: every label fits", switches);
+    CHECK (outside == 0 && overlapping == 0, "%d controls: %d outside the panel, %d overlapping", (int) controls.size(), outside, overlapping);
+    CHECK ((int) controls.size() == 66, "the panel has %d controls", (int) controls.size());
+    std::printf ("panel texts: widest menu entry %.1f of %.1f\n", widest, room);
+}
+
+// ------------------------------------------------------------------------------------------------ 5c. drawing cost
+
+// The fixed artwork is drawn once into a stored picture, and 30 times a second only the live areas are redrawn.
+// Measured here against drawing the whole panel every time.
+static void testDrawingCost()
+{
+    using namespace CxStyle;
+    ComplicatorAudioProcessor proc;
+    for (const float s : { 1.2f, 1.8f })
+    {
+        std::unique_ptr<juce::AudioProcessorEditor> edBase (proc.createEditor());
+        auto* ed = dynamic_cast<ComplicatorAudioProcessorEditor*> (edBase.get());
+        if (ed == nullptr) { CHECK (false, "the panel opens"); return; }
+        ed->setSize (juce::roundToInt (panelW * s), juce::roundToInt (panelH * s));
+        juce::Image img (juce::Image::ARGB, ed->getWidth(), ed->getHeight(), true);
+        juce::RectangleList<int> live;
+        for (const auto& a : ComplicatorPanel::liveAreas())
+            live.add (a.toFloat().transformedBy (juce::AffineTransform::scale (s)).getSmallestIntegerContainer());
+        auto timeIt = [&] (bool liveOnly, int n)
+        {
+            const auto t0 = std::chrono::steady_clock::now();
+            for (int i = 0; i < n; ++i)
+            {
+                juce::Graphics g (img);
+                if (liveOnly) g.reduceClipRegion (live);
+                ed->paintEntireComponent (g, true);
+            }
+            return std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - t0).count() / n;
+        };
+        auto& backdrop = ed->getPanel().getBackdrop();
+        backdrop.setBufferedToImage (false);
+        timeIt (false, 3);
+        const double whole = timeIt (false, 20);
+        backdrop.setBufferedToImage (true);
+        timeIt (true, 3);
+        const double tick = timeIt (true, 60);
+        std::printf ("drawing at size %.0f%%: live update %.2f ms, whole panel every time %.2f ms\n", s * 100.0f, tick, whole);
+        CHECK (tick < 0.6 * whole, "size %.0f%%: the live update (%.2f ms) is much lighter than drawing the whole panel (%.2f ms)", s * 100.0f, tick, whole);
+        CHECK (tick < 6.0, "size %.0f%%: the live update takes %.2f ms (limit 6 ms; 30 updates a second)", s * 100.0f, tick);
+    }
+}
+
 // For looking at the panel without Logic: --snapshot <folder> writes PNGs of the panel in a few states.
 static void writeSnapshots (const juce::File& dir)
 {
     dir.createDirectory();
-    auto shoot = [&] (ComplicatorAudioProcessor& proc, const char* name)
+    // One picture of the panel: optionally with a held note rendered first, so the scopes show something.
+    auto shoot = [&] (Runner& r, const char* name, float scale, int note)
     {
-        std::unique_ptr<juce::AudioProcessorEditor> editor (proc.createEditor());
+        std::unique_ptr<juce::AudioProcessorEditor> editor (r.proc.createEditor());
+        if (scale > 0.0f)
+            editor->setSize (juce::roundToInt (CxStyle::panelW * scale), juce::roundToInt (CxStyle::panelH * scale));
+        if (note >= 0)
+        {
+            r.noteOn (note);
+            r.run (40);
+            if (auto* e = dynamic_cast<ComplicatorAudioProcessorEditor*> (editor.get()))
+                e->getPanel().tickNow();
+        }
         const auto image = editor->createComponentSnapshot (editor->getLocalBounds(), true, 1.0f);
         juce::PNGImageFormat png;
         juce::FileOutputStream out (dir.getChildFile (name));
@@ -492,21 +646,13 @@ static void writeSnapshots (const juce::File& dir)
         out.truncate();
         png.writeImageToStream (image, out);
     };
-    {
-        ComplicatorAudioProcessor p;
-        shoot (p, "panel-init.png");
-    }
-    {
-        ComplicatorAudioProcessor p;
-        p.setCurrentProgram (3);
-        setReal (param (p, "quality"), 2.0f);
-        shoot (p, "panel-growl-8x.png");
-    }
-    {
-        ComplicatorAudioProcessor p;
-        p.setCurrentProgram (9);
-        shoot (p, "panel-wavefolder.png");
-    }
+    { Runner r; shoot (r, "panel-init.png", 0.0f, -1); }
+    { Runner r; r.proc.setCurrentProgram (3); setReal (param (r.proc, "quality"), 2.0f); shoot (r, "panel-growl-8x-note.png", 0.0f, 48); }
+    { Runner r; r.proc.setCurrentProgram (9); shoot (r, "panel-wavefolder-note-100.png", 1.0f, 60); }
+    { Runner r; r.proc.setCurrentProgram (8); shoot (r, "panel-five-modules-note-90.png", 0.9f, 55); }
+    { Runner r; r.proc.setCurrentProgram (7); shoot (r, "panel-complete-voice-note-180.png", 1.8f, 52); }
+    { Runner r; r.proc.setCurrentProgram (2); setReal (param (r.proc, "sync"), 2.0f); setReal (param (r.proc, "pitchScale"), 28.0f);
+      setReal (param (r.proc, "pitchSnap"), 1.0f); shoot (r, "panel-scale-sync-note.png", 0.0f, 57); }
 }
 
 int main (int argc, char** argv)
@@ -531,6 +677,8 @@ int main (int argc, char** argv)
     testPrograms();
     testQuality();
     testPanel();
+    testPanelLook();
+    testDrawingCost();
     testAutomation();
     testCpu();
 

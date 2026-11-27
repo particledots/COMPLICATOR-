@@ -43,6 +43,7 @@ target_compile_definitions(Complicator PUBLIC
 target_link_libraries(Complicator
     PRIVATE
         complicator_engine
+        ComplicatorFonts
         juce::juce_audio_processors
         juce::juce_gui_basics
     PUBLIC

@@ -8,7 +8,7 @@ if(APPLE)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version")
 endif()
 
-project(Complicator VERSION 0.3.0 LANGUAGES C CXX)
+project(Complicator VERSION 0.3.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -35,6 +35,15 @@ if(COMPLICATOR_BUILD_PLUGIN OR COMPLICATOR_BUILD_CHECK)
         GIT_SHALLOW    TRUE
     )
     FetchContent_MakeAvailable(JUCE)
+    # The panel's fonts (built into the plugin so it looks and measures the same on every Mac and in the check).
+    juce_add_binary_data(ComplicatorFonts
+        HEADER_NAME CxFontData.h
+        NAMESPACE   CxFontData
+        SOURCES
+            plugin/Fonts/SpaceGrotesk-Regular.ttf
+            plugin/Fonts/SpaceGrotesk-Medium.ttf
+            plugin/Fonts/Marcellus-Regular.ttf
+    )
     if(COMPLICATOR_BUILD_PLUGIN)
         add_subdirectory(plugin)
     endif()

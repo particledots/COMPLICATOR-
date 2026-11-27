@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.1 — new panel look (built, not yet tested in Logic)
+
+- Panel restyled in the "gold sections" look of Anamnesis 0.3.1: gold frames with titles, flow lines, cream knob caps in
+  gold range arcs, blue lamps as the only colour, Marcellus title, Space Grotesk labels (fonts built in).
+- Layout: Preset and Quality in their own row; Index and its CV amount and routes in their own section; Sub, Multiply
+  mode and PWM route as lamp lists; Patch menus have their names above them. 680 x 708 units, opens at 120%.
+- No control, id, order, range, menu list or plugin / manufacturer code changed. Saved projects load as before.
+- The fixed artwork is a stored picture; only the scopes and Coarse texts are redrawn 30 times a second.
+- ComplicatorCheck: title fits at five sizes (drawn pixels), all texts fit and none touch, no controls overlap, drawing
+  cost; the Actions run now uploads panel pictures. 2326 checks, 0 failed.
+
 ## 0.3.0 addendum — 22 more factory presets (built and tested in Logic 2026-11-17)
 
 - **22 new factory presets** of my own (not from the manual), appended after the nine existing ones: Glass Bell,
